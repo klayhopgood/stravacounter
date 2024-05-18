@@ -1,13 +1,13 @@
-from flask import Flask, request, jsonify, redirect, url_for, session, render_template
-from authlib.integrations.flask_client import OAuth
-import requests
-import datetime
 import os
+from flask import Flask, redirect, url_for, session, request, jsonify
+from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'random_secret_key')
-oauth = OAuth(app)
+app.secret_key = 'random_secret_key'  # Replace with your actual secret key
+app.config['SESSION_TYPE'] = 'filesystem'
 
+# Configure OAuth
+oauth = OAuth(app)
 strava = oauth.register(
     name='strava',
     client_id=os.getenv('STRAVA_CLIENT_ID'),
