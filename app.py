@@ -105,6 +105,8 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         connection.close()
 
 def get_tokens_from_db(owner_id):
+    connection = None
+    cursor = None
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
@@ -114,9 +116,13 @@ def get_tokens_from_db(owner_id):
         return result
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
         return None
     finally:
-        if connection.is_connected():
+        if connection and connection.is_connected():
             connection.close()
 
 @app.route('/webhook', methods=['GET', 'POST'])
