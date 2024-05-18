@@ -166,6 +166,7 @@ def handle_activity_create(activity_id, owner_id):
 
     activities = response.json()
     days_run, total_days = calculate_days_run_this_year(activities)
+    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
 
     # Get the activity to update
     activity_response = requests.get(
@@ -180,7 +181,7 @@ def handle_activity_create(activity_id, owner_id):
     activity = activity_response.json()
 
     # Update the description
-    new_description = f"{activity.get('description', '')}\nDays run this year: {days_run}/{total_days}"
+    new_description = f"{activity.get('description', '')}Days run this year: {days_run}/{total_days}\nTotal kms run this year: {total_kms_run}\nAverage kms per week (last 4 weeks): {avg_kms_per_week}"
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
@@ -209,6 +210,26 @@ def calculate_days_run_this_year(activities):
     total_days = (today - start_of_year).days + 1
 
     return days_run, total_days
+
+def calculate_kms_stats(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    total_kms = 0
+    kms_last_4_weeks = []
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            activity_kms = activity['distance'] / 1000  # Convert meters to kilometers
+            total_kms += activity_kms
+
+            if today - datetime.timedelta(weeks=4) <= activity_date <= today:
+                kms_last_4_weeks.append(activity_kms)
+
+    avg_kms_per_week = sum(kms_last_4_weeks) / 4 if kms_last_4_weeks else 0
+
+    return total_kms, avg_kms_per_week
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
