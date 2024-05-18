@@ -8,18 +8,15 @@ app = Flask(__name__)
 app.secret_key = 'random_secret_key'
 oauth = OAuth(app)
 
-strava = oauth.remote_app(
-    'strava',
-    consumer_key=os.getenv('STRAVA_CLIENT_ID'),
-    consumer_secret=os.getenv('STRAVA_CLIENT_SECRET'),
-    request_token_params={
-        'scope': 'read,activity:write,activity:read_all'
-    },
-    base_url='https://www.strava.com/api/v3/',
-    request_token_url=None,
-    access_token_method='POST',
+strava = oauth.register(
+    name='strava',
+    client_id=os.getenv('STRAVA_CLIENT_ID'),
+    client_secret=os.getenv('STRAVA_CLIENT_SECRET'),
+    authorize_url='https://www.strava.com/oauth/authorize',
+    authorize_params=None,
     access_token_url='https://www.strava.com/oauth/token',
-    authorize_url='https://www.strava.com/oauth/authorize'
+    access_token_params=None,
+    client_kwargs={'scope': 'read,activity:write,activity:read_all'}
 )
 
 @app.route('/')
@@ -30,28 +27,19 @@ def index():
 
 @app.route('/login')
 def login():
-    return strava.authorize(callback=url_for('authorized', _external=True))
+    redirect_uri = url_for('authorize', _external=True)
+    return strava.authorize_redirect(redirect_uri)
 
 @app.route('/logout')
 def logout():
     session.pop('strava_token', None)
     return redirect(url_for('index'))
 
-@app.route('/login/authorized')
-def authorized():
-    response = strava.authorized_response()
-    if response is None or response.get('access_token') is None:
-        return 'Access denied: reason={} error={}'.format(
-            request.args['error_reason'],
-            request.args['error_description']
-        )
-    session['strava_token'] = (response['access_token'], '')
-    session['strava_refresh_token'] = response['refresh_token']
+@app.route('/authorize')
+def authorize():
+    token = strava.authorize_access_token()
+    session['strava_token'] = token
     return redirect(url_for('index'))
-
-@strava.tokengetter
-def get_strava_oauth_token():
-    return session.get('strava_token')
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -70,7 +58,7 @@ def webhook():
 
 def handle_activity_create(activity_id):
     headers = {
-        'Authorization': f'Bearer {session["strava_token"][0]}'
+        'Authorization': f'Bearer {session["strava_token"]["access_token"]}'
     }
 
     response = requests.get(
@@ -80,7 +68,6 @@ def handle_activity_create(activity_id):
     )
 
     print(f"Response Status Code: {response.status_code}")
-
 
     if response.status_code != 200:
         print(f"Failed to fetch activities: {response.text}")
