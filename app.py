@@ -1,69 +1,52 @@
-import os
-import json
-import datetime
 from flask import Flask, redirect, url_for, session, request, jsonify, render_template
-from flask_sqlalchemy import SQLAlchemy
-from authlib.integrations.flask_client import OAuth
 import requests
+import datetime
+import os
+from urllib.parse import quote
 
 app = Flask(__name__)
-app.config.from_object('config')
+app.secret_key = os.urandom(24)
 
-db = SQLAlchemy(app)
-
-class StravaToken(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.BigInteger, nullable=False)
-    access_token = db.Column(db.String(255), nullable=False)
-    refresh_token = db.Column(db.String(255), nullable=False)
-    expires_at = db.Column(db.BigInteger, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-
-# Configure OAuth
-oauth = OAuth(app)
-strava = oauth.register(
-    name='strava',
-    client_id=app.config['STRAVA_CLIENT_ID'],
-    client_secret=app.config['STRAVA_CLIENT_SECRET'],
-    authorize_url='https://www.strava.com/oauth/authorize',
-    authorize_params=None,
-    access_token_url='https://www.strava.com/oauth/token',
-    access_token_params=None,
-    client_kwargs={'scope': 'read,activity:write,activity:read_all'}
-)
+VERIFY_TOKEN = 'STRAVA'
 
 @app.route('/')
 def index():
-    if 'strava_token' in session:
-        return jsonify({'access_token': session['strava_token']})
     return render_template('login.html')
 
 @app.route('/login')
 def login():
-    redirect_uri = url_for('authorize', _external=True)
-    return strava.authorize_redirect(redirect_uri)
+    strava_authorize_url = (
+        f"https://www.strava.com/oauth/authorize?client_id={os.getenv('STRAVA_CLIENT_ID')}&response_type=code"
+        f"&redirect_uri={quote(os.getenv('REDIRECT_URI'), safe='')}&approval_prompt=force&scope=read,activity:write,activity:read_all"
+    )
+    return redirect(strava_authorize_url)
+
+@app.route('/authorize')
+def authorize():
+    code = request.args.get('code')
+    token_response = requests.post(
+        'https://www.strava.com/oauth/token',
+        data={
+            'client_id': os.getenv('STRAVA_CLIENT_ID'),
+            'client_secret': os.getenv('STRAVA_CLIENT_SECRET'),
+            'code': code,
+            'grant_type': 'authorization_code'
+        }
+    )
+    token_json = token_response.json()
+    session['strava_token'] = token_json
+    return redirect(url_for('dashboard'))
+
+@app.route('/dashboard')
+def dashboard():
+    if 'strava_token' not in session:
+        return redirect(url_for('login'))
+    token = session['strava_token']['access_token']
+    return f"Welcome to Strava Counter<br>Your access token: {token}<br><a href='/logout'>Logout</a>"
 
 @app.route('/logout')
 def logout():
     session.pop('strava_token', None)
-    return redirect(url_for('index'))
-
-@app.route('/authorize')
-def authorize():
-    token = strava.authorize_access_token()
-    session['strava_token'] = token
-    user_id = token['athlete']['id']
-
-    # Save token to database
-    strava_token = StravaToken(
-        user_id=user_id,
-        access_token=token['access_token'],
-        refresh_token=token['refresh_token'],
-        expires_at=token['expires_at']
-    )
-    db.session.add(strava_token)
-    db.session.commit()
-
     return redirect(url_for('index'))
 
 @app.route('/webhook', methods=['GET', 'POST'])
@@ -71,26 +54,19 @@ def webhook():
     if request.method == 'GET':
         verify_token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
-        if verify_token == 'STRAVA':
+        if verify_token == VERIFY_TOKEN:
             return jsonify({'hub.challenge': challenge})
         return 'Invalid verification token', 403
     elif request.method == 'POST':
         event = request.json
         print(f"Received event: {event}")
         if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
-            handle_activity_create(event['object_id'], event['owner_id'])
+            handle_activity_create(event['object_id'])
         return 'Event received', 200
 
-def handle_activity_create(activity_id, user_id):
-    # Get the token for the user from the database
-    strava_token = StravaToken.query.filter_by(user_id=user_id).order_by(StravaToken.created_at.desc()).first()
-
-    if not strava_token:
-        print("No strava_token found for user.")
-        return
-
+def handle_activity_create(activity_id):
     headers = {
-        'Authorization': f'Bearer {strava_token.access_token}'
+        'Authorization': f'Bearer {os.getenv('STRAVA_ACCESS_TOKEN')}'
     }
 
     response = requests.get(
@@ -152,5 +128,4 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 if __name__ == '__main__':
-    db.create_all()
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
