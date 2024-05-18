@@ -1,5 +1,5 @@
 import os
-from flask import Flask, redirect, url_for, session, request, jsonify
+from flask import Flask, redirect, url_for, session, request, jsonify, render_template
 from authlib.integrations.flask_client import OAuth
 
 app = Flask(__name__)
@@ -57,6 +57,10 @@ def webhook():
         return 'Event received', 200
 
 def handle_activity_create(activity_id):
+    if 'strava_token' not in session:
+        print("No strava_token in session.")
+        return
+
     headers = {
         'Authorization': f'Bearer {session["strava_token"]["access_token"]}'
     }
@@ -100,37 +104,3 @@ def handle_activity_create(activity_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
-
-def calculate_days_run_this_year(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
-
-    run_dates = set()
-
-    for activity in activities:
-        if activity['type'] == 'Run':
-            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
-            if run_date >= start_of_year.date():
-                run_dates.add(run_date)
-                print(f"Counted Run Date: {run_date}")
-
-    days_run = len(run_dates)
-    total_days = (today - start_of_year).days + 1
-
-    return days_run, total_days
-
-def update_activity_description(activity_id, description):
-    headers = {
-        'Authorization': f'Bearer {ACCESS_TOKEN}'
-    }
-    data = {
-        'description': description
-    }
-    response = requests.put(f'https://www.strava.com/api/v3/activities/{activity_id}', headers=headers, json=data)
-    if response.status_code == 200:
-        print(f"Activity {activity_id} updated successfully")
-    else:
-        print(f"Failed to update activity {activity_id}: {response.status_code} {response.text}")
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)

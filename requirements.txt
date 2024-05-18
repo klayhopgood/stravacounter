@@ -1,4 +1,4 @@
-Flask
 gunicorn
-requests
-Authlib
+Flask==2.3.2
+requests==2.31.0
+Authlib==1.0.0
