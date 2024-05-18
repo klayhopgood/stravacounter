@@ -38,17 +38,57 @@ def handle_activity_create(activity_id):
     else:
         print(f"Failed to fetch activities: {response.text}")
 
-def calculate_days_run_this_year(activities):
-    now = datetime.datetime.now()
-    start_of_year = datetime.datetime(now.year, 1, 1)
-    days_run = set()
+
+def calculate_days_run_this_year():
+    headers = {
+        'Authorization': f'Bearer {STRAVA_ACCESS_TOKEN}'
+    }
+
+    # Get the current date and the start of the year
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    activities = []
+    page = 1
+    per_page = 200
+    fetched_all = False
+
+    while not fetched_all:
+        response = requests.get(
+            f'https://www.strava.com/api/v3/athlete/activities',
+            headers=headers,
+            params={'page': page, 'per_page': per_page}
+        )
+
+        if response.status_code != 200:
+            print(f"Failed to fetch activities: {response.text}")
+            return 0, 0
+
+        data = response.json()
+        activities.extend(data)
+
+        # Check if we've fetched all activities
+        if len(data) < per_page:
+            fetched_all = True
+        else:
+            page += 1
+
+        # Filter out activities older than the start of the year
+        activities = [activity for activity in activities if
+                      datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%SZ') >= start_of_year]
+
+    run_dates = set()
+
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%SZ')
-            if activity_date >= start_of_year:
-                days_run.add(activity_date.date())
-    total_days = (now - start_of_year).days + 1
-    return len(days_run), total_days
+            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%SZ').date()
+            run_dates.add(run_date)
+            print(f"Counted Run Date: {run_date}")
+
+    days_run = len(run_dates)
+    total_days = (today - start_of_year).days + 1
+
+    return days_run, total_days
 
 def update_activity_description(activity_id, description):
     headers = {
