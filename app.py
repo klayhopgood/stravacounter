@@ -1,11 +1,57 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect, url_for, session, render_template
+from flask_oauthlib.client import OAuth
 import requests
 import datetime
+import os
 
 app = Flask(__name__)
+app.secret_key = 'random_secret_key'
+oauth = OAuth(app)
 
-VERIFY_TOKEN = 'STRAVA'
-ACCESS_TOKEN = 'd0501c0ca101046b32d3839d7f409339ba8c3d01'  # Use your actual access token
+strava = oauth.remote_app(
+    'strava',
+    consumer_key=os.getenv('STRAVA_CLIENT_ID'),
+    consumer_secret=os.getenv('STRAVA_CLIENT_SECRET'),
+    request_token_params={
+        'scope': 'read,activity:write,activity:read_all'
+    },
+    base_url='https://www.strava.com/api/v3/',
+    request_token_url=None,
+    access_token_method='POST',
+    access_token_url='https://www.strava.com/oauth/token',
+    authorize_url='https://www.strava.com/oauth/authorize'
+)
+
+@app.route('/')
+def index():
+    if 'strava_token' in session:
+        return render_template('index.html', token=session['strava_token'])
+    return render_template('login.html')
+
+@app.route('/login')
+def login():
+    return strava.authorize(callback=url_for('authorized', _external=True))
+
+@app.route('/logout')
+def logout():
+    session.pop('strava_token', None)
+    return redirect(url_for('index'))
+
+@app.route('/login/authorized')
+def authorized():
+    response = strava.authorized_response()
+    if response is None or response.get('access_token') is None:
+        return 'Access denied: reason={} error={}'.format(
+            request.args['error_reason'],
+            request.args['error_description']
+        )
+    session['strava_token'] = (response['access_token'], '')
+    session['strava_refresh_token'] = response['refresh_token']
+    return redirect(url_for('index'))
+
+@strava.tokengetter
+def get_strava_oauth_token():
+    return session.get('strava_token')
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -24,7 +70,7 @@ def webhook():
 
 def handle_activity_create(activity_id):
     headers = {
-        'Authorization': f'Bearer {ACCESS_TOKEN}'
+        'Authorization': f'Bearer {session["strava_token"][0]}'
     }
 
     response = requests.get(
