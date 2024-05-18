@@ -110,13 +110,14 @@ def get_tokens_from_db(owner_id):
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (owner_id,))
         result = cursor.fetchone()
+        cursor.close()
         return result
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
         return None
     finally:
-        cursor.close()
-        connection.close()
+        if connection.is_connected():
+            connection.close()
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -130,11 +131,10 @@ def webhook():
         event = request.json
         print(f"Received event: {event}")
         if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
-            handle_activity_create(event['object_id'])
+            handle_activity_create(event['object_id'], event['owner_id'])
         return 'Event received', 200
 
-def handle_activity_create(activity_id):
-    owner_id = request.json.get('owner_id')
+def handle_activity_create(activity_id, owner_id):
     if not owner_id:
         print("No owner_id in the request")
         return
@@ -188,7 +188,6 @@ def handle_activity_create(activity_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
-
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
