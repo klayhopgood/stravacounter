@@ -22,10 +22,9 @@ def webhook():
             handle_activity_create(event['object_id'])
         return 'Event received', 200
 
-
 def handle_activity_create(activity_id):
     headers = {
-        'Authorization': f'Bearer {STRAVA_ACCESS_TOKEN}'
+        'Authorization': f'Bearer {ACCESS_TOKEN}'
     }
 
     response = requests.get(
@@ -67,7 +66,6 @@ def handle_activity_create(activity_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
-
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
