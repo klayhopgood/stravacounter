@@ -1,4 +1,7 @@
 gunicorn
-Flask==2.3.2
-requests==2.31.0
-Authlib==1.0.0
+Flask==2.0.3
+requests==2.26.0
+Flask-OAuthlib==0.9.6
+Flask-SQLAlchemy==2.5.1
+pymysql==1.0.2
+authlib==0.15.4
