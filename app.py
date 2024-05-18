@@ -3,7 +3,7 @@ import requests
 import mysql.connector
 from mysql.connector import errorcode
 import os
-import datetime  # Importing datetime
+import datetime
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -46,11 +46,11 @@ def get_access_token(athlete_id):
             SELECT access_token FROM strava_tokens WHERE athlete_id = %s
         """, (athlete_id,))
         result = cursor.fetchone()
+        cursor.close()  # Ensure cursor is closed after fetching the data
         return result[0] if result else None
     except mysql.connector.Error as err:
         print(err)
     finally:
-        cursor.close()
         connection.close()
 
 @app.route('/')
@@ -85,9 +85,9 @@ def login_callback():
             session['access_token'] = access_token
             return redirect(url_for('index'))
         else:
-            return 'Failed to login. Error: ' + response.text
+            return f"Failed to login. Error: {response.text}", 400
     else:
-        return 'Authorization code not received.'
+        return "Authorization code not received.", 400
 
 @app.route('/index')
 def index():
@@ -114,7 +114,7 @@ def webhook():
 def handle_activity_create(activity_id, athlete_id):
     access_token = get_access_token(athlete_id)
     if not access_token:
-        print("No access_token found for athlete_id: ", athlete_id)
+        print(f"No access_token found for athlete_id: {athlete_id}")
         return
 
     headers = {
@@ -126,8 +126,6 @@ def handle_activity_create(activity_id, athlete_id):
         headers=headers,
         params={'per_page': 200}
     )
-
-    print(f"Response Status Code: {response.status_code}")
 
     if response.status_code != 200:
         print(f"Failed to fetch activities: {response.text}")
