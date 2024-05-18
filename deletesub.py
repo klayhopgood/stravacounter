@@ -2,7 +2,7 @@ import requests
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
 
 # Replace with the actual subscription ID you want to delete
-subscription_id = '258814'
+subscription_id = '258815'
 
 response = requests.delete(
     f'https://www.strava.com/api/v3/push_subscriptions/{subscription_id}',

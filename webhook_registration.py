@@ -1,7 +1,7 @@
 import requests
 from config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET
 
-CALLBACK_URL = 'https://2744-109-25-96-79.ngrok-free.app/webhook'  # Replace with your actual ngrok URL
+CALLBACK_URL = 'https://plankton-app-fdt3l.ondigitalocean.app/webhook'  # Replace with your actual ngrok URL
 
 create_url = 'https://www.strava.com/api/v3/push_subscriptions'
 response = requests.post(
