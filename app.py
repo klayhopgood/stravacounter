@@ -104,11 +104,11 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         cursor.close()
         connection.close()
 
-def get_tokens_from_db(athlete_id):
+def get_tokens_from_db(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (owner_id,))
         result = cursor.fetchone()
         return result
     except mysql.connector.Error as err:
@@ -134,14 +134,14 @@ def webhook():
         return 'Event received', 200
 
 def handle_activity_create(activity_id):
-    athlete_id = session.get('athlete_id')
-    if not athlete_id:
-        print("No athlete_id in session")
+    owner_id = request.json.get('owner_id')
+    if not owner_id:
+        print("No owner_id in the request")
         return
 
-    tokens = get_tokens_from_db(athlete_id)
+    tokens = get_tokens_from_db(owner_id)
     if not tokens:
-        print(f"No tokens found for athlete_id {athlete_id}")
+        print(f"No tokens found for owner_id {owner_id}")
         return
 
     access_token = tokens['access_token']
@@ -181,13 +181,14 @@ def handle_activity_create(activity_id):
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        data={'description': new_description}
+        json={'description': new_description}  # Use JSON data
     )
 
     if update_response.status_code == 200:
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
