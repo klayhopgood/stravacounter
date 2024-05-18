@@ -5,3 +5,4 @@ Flask-OAuthlib==0.9.6
 Flask-SQLAlchemy==2.5.1
 pymysql==1.0.2
 authlib==0.15.4
+mysql-connector-python
