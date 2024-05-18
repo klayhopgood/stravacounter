@@ -181,13 +181,12 @@ def handle_activity_create(activity_id, owner_id):
     activity = activity_response.json()
 
     # Update the description
-    new_description = f"{activity.get('description', '')}Days run this year: {days_run}/{total_days}\nTotal kms run this year: {total_kms_run}\nAverage kms per week (last 4 weeks): {avg_kms_per_week}"
+    new_description = f"{activity.get('description', '')}\nDays run this year: {days_run}/{total_days}\nTotal kms run this year: {total_kms_run}\nAverage kms per week (last 4 weeks): {avg_kms_per_week}"
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
         json={'description': new_description}  # Use JSON data
     )
-
 
     if update_response.status_code == 200:
         print(f"Activity {activity_id} updated successfully")
@@ -195,15 +194,15 @@ def handle_activity_create(activity_id, owner_id):
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
 
 def calculate_days_run_this_year(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    today = datetime.datetime.today().date()
+    start_of_year = datetime.datetime(today.year, 1, 1).date()
 
     run_dates = set()
 
     for activity in activities:
         if activity['type'] == 'Run':
             run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
-            if run_date >= start_of_year.date():
+            if run_date >= start_of_year:
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")
 
@@ -213,8 +212,8 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    today = datetime.datetime.today().date()
+    start_of_year = datetime.datetime(today.year, 1, 1).date()
 
     total_kms = 0
     kms_last_4_weeks = []
