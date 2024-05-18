@@ -133,17 +133,17 @@ def webhook():
         event = request.json
         print(f"Received event: {event}")
         if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
-            handle_activity_create(event['object_id'], event['owner_id'])
+            handle_activity_create(event['object_id'], event['athlete_id'])
         return 'Event received', 200
 
-def handle_activity_create(activity_id, owner_id):
-    if not owner_id:
-        print("No owner_id in the request")
+def handle_activity_create(activity_id, athlete_id):
+    if not athlete_id:
+        print("No athlete_id in the request")
         return
 
-    tokens = get_tokens_from_db(owner_id)
+    tokens = get_tokens_from_db(athlete_id)
     if not tokens:
-        print(f"No tokens found for owner_id {owner_id}")
+        print(f"No tokens found for athlete_id {athlete_id}")
         return
 
     access_token = tokens['access_token']
