@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, redirect, url_for, session, render_template
-from flask_oauthlib.client import OAuth
+from authlib.integrations.flask_client import OAuth
 import requests
 import datetime
 import os

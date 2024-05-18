@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Strava Uploader</title>
-    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strava Counter</title>
 </head>
 <body>
-    <h1>Welcome to Strava Uploader</h1>
-    <p>Click the button below to update your latest activity description with your running stats.</p>
-    <a href="/authorize"><button>Update Description</button></a>
+    <h1>Welcome to Strava Counter</h1>
+    <p>Your access token: {{ token }}</p>
+    <a href="{{ url_for('logout') }}">Logout</a>
 </body>
 </html>
+
