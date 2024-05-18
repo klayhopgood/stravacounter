@@ -1,58 +1,18 @@
-import os
-import json
-import datetime
-from flask import Flask, redirect, url_for, session, request, jsonify, render_template
-from authlib.integrations.flask_client import OAuth
+from flask import Flask, request, jsonify
 import requests
+import datetime
 
 app = Flask(__name__)
-app.secret_key = 'random_secret_key'  # Replace with your actual secret key
-app.config['SESSION_TYPE'] = 'filesystem'
 
-# Configure OAuth
-oauth = OAuth(app)
-strava = oauth.register(
-    name='strava',
-    client_id=os.getenv('STRAVA_CLIENT_ID'),
-    client_secret=os.getenv('STRAVA_CLIENT_SECRET'),
-    authorize_url='https://www.strava.com/oauth/authorize',
-    authorize_params=None,
-    access_token_url='https://www.strava.com/oauth/token',
-    access_token_params=None,
-    client_kwargs={'scope': 'read,activity:write,activity:read_all'}
-)
-
-@app.route('/')
-def index():
-    if 'strava_token' in session:
-        return jsonify({'access_token': session['strava_token']})
-    return render_template('login.html')
-
-@app.route('/login')
-def login():
-    redirect_uri = url_for('authorize', _external=True)
-    return strava.authorize_redirect(redirect_uri)
-
-@app.route('/logout')
-def logout():
-    session.pop('strava_token', None)
-    return redirect(url_for('index'))
-
-@app.route('/authorize')
-def authorize():
-    token = strava.authorize_access_token()
-    session['strava_token'] = token
-    # Save token to file
-    with open('strava_token.json', 'w') as f:
-        json.dump(token, f)
-    return redirect(url_for('index'))
+VERIFY_TOKEN = 'STRAVA'
+ACCESS_TOKEN = 'd0501c0ca101046b32d3839d7f409339ba8c3d01'  # Use your actual access token
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
         verify_token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
-        if verify_token == 'STRAVA':
+        if verify_token == VERIFY_TOKEN:
             return jsonify({'hub.challenge': challenge})
         return 'Invalid verification token', 403
     elif request.method == 'POST':
@@ -63,16 +23,8 @@ def webhook():
         return 'Event received', 200
 
 def handle_activity_create(activity_id):
-    try:
-        # Load token from file
-        with open('strava_token.json', 'r') as f:
-            token = json.load(f)
-    except FileNotFoundError:
-        print("No strava_token found.")
-        return
-
     headers = {
-        'Authorization': f'Bearer {token["access_token"]}'
+        'Authorization': f'Bearer {ACCESS_TOKEN}'
     }
 
     response = requests.get(
@@ -133,5 +85,18 @@ def calculate_days_run_this_year(activities):
 
     return days_run, total_days
 
+def update_activity_description(activity_id, description):
+    headers = {
+        'Authorization': f'Bearer {ACCESS_TOKEN}'
+    }
+    data = {
+        'description': description
+    }
+    response = requests.put(f'https://www.strava.com/api/v3/activities/{activity_id}', headers=headers, json=data)
+    if response.status_code == 200:
+        print(f"Activity {activity_id} updated successfully")
+    else:
+        print(f"Failed to update activity {activity_id}: {response.status_code} {response.text}")
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
