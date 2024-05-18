@@ -114,6 +114,7 @@ def calculate_days_run_this_year(activities):
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")
 
+
     days_run = len(run_dates)
     total_days = (today - start_of_year).days + 1
 
