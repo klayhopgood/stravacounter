@@ -188,6 +188,7 @@ def handle_activity_create(activity_id, owner_id):
         json={'description': new_description}  # Use JSON data
     )
 
+
     if update_response.status_code == 200:
         print(f"Activity {activity_id} updated successfully")
     else:
