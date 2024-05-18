@@ -22,68 +22,65 @@ def webhook():
             handle_activity_create(event['object_id'])
         return 'Event received', 200
 
+
 def handle_activity_create(activity_id):
-    print(f"Processing activity creation for activity ID: {activity_id}")
-    headers = {
-        'Authorization': f'Bearer {ACCESS_TOKEN}'
-    }
-    response = requests.get(f'https://www.strava.com/api/v3/athlete/activities', headers=headers)
-    print(f"Response Status Code: {response.status_code}")
-    if response.status_code == 200:
-        activities = response.json()
-        print(f"Fetched {len(activities)} activities")
-        days_run, total_days = calculate_days_run_this_year(activities)
-        description = f"{days_run}/{total_days} days of running this year!"
-        update_activity_description(activity_id, description)
-    else:
-        print(f"Failed to fetch activities: {response.text}")
-
-
-def calculate_days_run_this_year():
     headers = {
         'Authorization': f'Bearer {STRAVA_ACCESS_TOKEN}'
     }
 
-    # Get the current date and the start of the year
+    response = requests.get(
+        'https://www.strava.com/api/v3/athlete/activities',
+        headers=headers,
+        params={'per_page': 200}
+    )
+
+    print(f"Response Status Code: {response.status_code}")
+
+    if response.status_code != 200:
+        print(f"Failed to fetch activities: {response.text}")
+        return
+
+    activities = response.json()
+    days_run, total_days = calculate_days_run_this_year(activities)
+
+    # Get the activity to update
+    activity_response = requests.get(
+        f'https://www.strava.com/api/v3/activities/{activity_id}',
+        headers=headers
+    )
+
+    if activity_response.status_code != 200:
+        print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
+        return
+
+    activity = activity_response.json()
+
+    # Update the description
+    new_description = f"{activity.get('description', '')}\nDays run this year: {days_run}/{total_days}"
+    update_response = requests.put(
+        f'https://www.strava.com/api/v3/activities/{activity_id}',
+        headers=headers,
+        data={'description': new_description}
+    )
+
+    if update_response.status_code == 200:
+        print(f"Activity {activity_id} updated successfully")
+    else:
+        print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
+
+def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
     start_of_year = datetime.datetime(today.year, 1, 1)
-
-    activities = []
-    page = 1
-    per_page = 200
-    fetched_all = False
-
-    while not fetched_all:
-        response = requests.get(
-            f'https://www.strava.com/api/v3/athlete/activities',
-            headers=headers,
-            params={'page': page, 'per_page': per_page}
-        )
-
-        if response.status_code != 200:
-            print(f"Failed to fetch activities: {response.text}")
-            return 0, 0
-
-        data = response.json()
-        activities.extend(data)
-
-        # Check if we've fetched all activities
-        if len(data) < per_page:
-            fetched_all = True
-        else:
-            page += 1
-
-        # Filter out activities older than the start of the year
-        activities = [activity for activity in activities if
-                      datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%SZ') >= start_of_year]
 
     run_dates = set()
 
     for activity in activities:
         if activity['type'] == 'Run':
-            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%SZ').date()
-            run_dates.add(run_date)
-            print(f"Counted Run Date: {run_date}")
+            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            if run_date >= start_of_year.date():
+                run_dates.add(run_date)
+                print(f"Counted Run Date: {run_date}")
 
     days_run = len(run_dates)
     total_days = (today - start_of_year).days + 1
