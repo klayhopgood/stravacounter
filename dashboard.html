@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Data App</title>
+    <title>Strava Dashboard</title>
     <!-- Bootstrap CSS -->
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -36,13 +36,23 @@
             background-color: #0d47a1;
             border-color: #0d47a1;
         }
+
+        .btn-danger {
+            background-color: #d9534f;
+            border-color: #d43f3a;
+        }
+
+        .btn-danger:hover {
+            background-color: #c9302c;
+            border-color: #ac2925;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Strava Data App</h1>
-        <p>To get started, sign up with Strava:</p>
-        <a href="/login" class="btn btn-primary">SIGN UP WITH STRAVA</a>
+        <h1>Welcome to Strava Dashboard</h1>
+        <p>You are now logged in.</p>
+        <a href="/logout" class="btn btn-danger">LOG OUT</a>
     </div>
 </body>
 </html>

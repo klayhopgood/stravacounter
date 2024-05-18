@@ -19,8 +19,7 @@ db_config = {
     'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': 25060,
-    'database': 'defaultdb',
-    'sslmode': 'REQUIRED'
+    'database': 'defaultdb'
 }
 
 def save_tokens_to_db(access_token, refresh_token, athlete_id):
@@ -54,8 +53,8 @@ def save_tokens_to_db(access_token, refresh_token, athlete_id):
 @app.route('/')
 def index():
     if 'access_token' in session:
-        return render_template('index.html')
-    return redirect(url_for('login'))
+        return render_template('dashboard.html')
+    return render_template('index.html')
 
 @app.route('/login')
 def login():
@@ -92,7 +91,7 @@ def login_callback():
 def logout():
     session.pop('access_token', None)
     session.pop('refresh_token', None)
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -110,8 +109,13 @@ def webhook():
         return 'Event received', 200
 
 def handle_activity_create(activity_id):
+    access_token = session.get('access_token')
+    if not access_token:
+        print("No access_token in session.")
+        return
+
     headers = {
-        'Authorization': f'Bearer {session["access_token"]}'
+        'Authorization': f'Bearer {access_token}'
     }
 
     response = requests.get(
