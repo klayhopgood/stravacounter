@@ -5,7 +5,7 @@ import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = 'random_secret_key'
+app.secret_key = os.getenv('SECRET_KEY', 'random_secret_key')
 oauth = OAuth(app)
 
 strava = oauth.register(
@@ -113,7 +113,6 @@ def calculate_days_run_this_year(activities):
             if run_date >= start_of_year.date():
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")
-
 
     days_run = len(run_dates)
     total_days = (today - start_of_year).days + 1
