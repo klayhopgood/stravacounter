@@ -106,11 +106,11 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         if connection:
             connection.close()
 
-def get_tokens_from_db(owner_id):
+def get_tokens_from_db(athlete_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (owner_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
