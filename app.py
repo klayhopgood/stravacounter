@@ -1,6 +1,8 @@
 import os
+import json
 from flask import Flask, redirect, url_for, session, request, jsonify, render_template
 from authlib.integrations.flask_client import OAuth
+import requests
 
 app = Flask(__name__)
 app.secret_key = 'random_secret_key'  # Replace with your actual secret key
@@ -22,7 +24,7 @@ strava = oauth.register(
 @app.route('/')
 def index():
     if 'strava_token' in session:
-        return render_template('index.html', token=session['strava_token'])
+        return jsonify({'access_token': session['strava_token']})
     return render_template('login.html')
 
 @app.route('/login')
@@ -39,6 +41,9 @@ def logout():
 def authorize():
     token = strava.authorize_access_token()
     session['strava_token'] = token
+    # Save token to file
+    with open('strava_token.json', 'w') as f:
+        json.dump(token, f)
     return redirect(url_for('index'))
 
 @app.route('/webhook', methods=['GET', 'POST'])
@@ -46,7 +51,7 @@ def webhook():
     if request.method == 'GET':
         verify_token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
-        if verify_token == VERIFY_TOKEN:
+        if verify_token == 'STRAVA':
             return jsonify({'hub.challenge': challenge})
         return 'Invalid verification token', 403
     elif request.method == 'POST':
@@ -57,12 +62,16 @@ def webhook():
         return 'Event received', 200
 
 def handle_activity_create(activity_id):
-    if 'strava_token' not in session:
-        print("No strava_token in session.")
+    try:
+        # Load token from file
+        with open('strava_token.json', 'r') as f:
+            token = json.load(f)
+    except FileNotFoundError:
+        print("No strava_token found.")
         return
 
     headers = {
-        'Authorization': f'Bearer {session["strava_token"]["access_token"]}'
+        'Authorization': f'Bearer {token["access_token"]}'
     }
 
     response = requests.get(
@@ -104,3 +113,24 @@ def handle_activity_create(activity_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
+def calculate_days_run_this_year(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    run_dates = set()
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            if run_date >= start_of_year.date():
+                run_dates.add(run_date)
+                print(f"Counted Run Date: {run_date}")
+
+    days_run = len(run_dates)
+    total_days = (today - start_of_year).days + 1
+
+    return days_run, total_days
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)
