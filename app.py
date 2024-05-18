@@ -81,6 +81,7 @@ def handle_activity_create(activity_id):
 
     print(f"Response Status Code: {response.status_code}")
 
+
     if response.status_code != 200:
         print(f"Failed to fetch activities: {response.text}")
         return
