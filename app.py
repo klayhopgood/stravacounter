@@ -7,10 +7,7 @@ from authlib.integrations.flask_client import OAuth
 import requests
 
 app = Flask(__name__)
-app.secret_key = 'random_secret_key'  # Replace with your actual secret key
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://klayhopgood:SuperSecretPassword123!@localhost/strava_db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config.from_object('config')
 
 db = SQLAlchemy(app)
 
@@ -26,8 +23,8 @@ class StravaToken(db.Model):
 oauth = OAuth(app)
 strava = oauth.register(
     name='strava',
-    client_id=os.getenv('STRAVA_CLIENT_ID'),
-    client_secret=os.getenv('STRAVA_CLIENT_SECRET'),
+    client_id=app.config['STRAVA_CLIENT_ID'],
+    client_secret=app.config['STRAVA_CLIENT_SECRET'],
     authorize_url='https://www.strava.com/oauth/authorize',
     authorize_params=None,
     access_token_url='https://www.strava.com/oauth/token',
