@@ -1,60 +1,105 @@
 from flask import Flask, redirect, url_for, session, request, jsonify, render_template
 import requests
-import datetime
 import os
-from urllib.parse import quote
+import mysql.connector
+from mysql.connector import Error
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-VERIFY_TOKEN = 'STRAVA'
+# Replace with your actual Strava client ID and secret
+client_id = os.getenv('STRAVA_CLIENT_ID')
+client_secret = os.getenv('STRAVA_CLIENT_SECRET')
+redirect_uri = os.getenv('STRAVA_REDIRECT_URI')
+
+# MySQL database configuration
+db_config = {
+    'user': 'doadmin',
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
+    'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
+    'port': 25060,
+    'database': 'defaultdb',
+    'sslmode': 'REQUIRED'
+}
+
+def save_tokens_to_db(access_token, refresh_token, athlete_id):
+    try:
+        connection = mysql.connector.connect(**db_config)
+        cursor = connection.cursor()
+
+        # Check if athlete_id already exists
+        cursor.execute("SELECT * FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
+        result = cursor.fetchone()
+
+        if result:
+            cursor.execute(
+                "UPDATE strava_tokens SET access_token = %s, refresh_token = %s, updated_at = %s WHERE athlete_id = %s",
+                (access_token, refresh_token, datetime.utcnow(), athlete_id)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO strava_tokens (athlete_id, access_token, refresh_token, created_at, updated_at) VALUES (%s, %s, %s, %s, %s)",
+                (athlete_id, access_token, refresh_token, datetime.utcnow(), datetime.utcnow())
+            )
+
+        connection.commit()
+    except Error as e:
+        print(f"Error: {e}")
+    finally:
+        if connection.is_connected():
+            cursor.close()
+            connection.close()
 
 @app.route('/')
 def index():
-    return render_template('login.html')
+    if 'access_token' in session:
+        return render_template('index.html')
+    return redirect(url_for('login'))
 
 @app.route('/login')
 def login():
-    strava_authorize_url = (
-        f"https://www.strava.com/oauth/authorize?client_id={os.getenv('STRAVA_CLIENT_ID')}&response_type=code"
-        f"&redirect_uri={quote(os.getenv('REDIRECT_URI'), safe='')}&approval_prompt=force&scope=read,activity:write,activity:read_all"
-    )
-    return redirect(strava_authorize_url)
+    authorize_url = f'https://www.strava.com/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
+    return redirect(authorize_url)
 
 @app.route('/authorize')
-def authorize():
+def login_callback():
     code = request.args.get('code')
-    token_response = requests.post(
-        'https://www.strava.com/oauth/token',
-        data={
-            'client_id': os.getenv('STRAVA_CLIENT_ID'),
-            'client_secret': os.getenv('STRAVA_CLIENT_SECRET'),
+    if code:
+        token_url = 'https://www.strava.com/oauth/token'
+        payload = {
+            'client_id': client_id,
+            'client_secret': client_secret,
             'code': code,
-            'grant_type': 'authorization_code'
+            'grant_type': 'authorization_code',
         }
-    )
-    token_json = token_response.json()
-    session['strava_token'] = token_json
-    return redirect(url_for('dashboard'))
-
-@app.route('/dashboard')
-def dashboard():
-    if 'strava_token' not in session:
-        return redirect(url_for('login'))
-    token = session['strava_token']['access_token']
-    return f"Welcome to Strava Counter<br>Your access token: {token}<br><a href='/logout'>Logout</a>"
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            tokens = response.json()
+            access_token = tokens.get('access_token')
+            refresh_token = tokens.get('refresh_token')
+            session['access_token'] = access_token
+            session['refresh_token'] = refresh_token
+            athlete_id = str(tokens.get('athlete').get('id'))
+            save_tokens_to_db(access_token, refresh_token, athlete_id)
+            return redirect(url_for('index'))
+        else:
+            return f"Failed to login. Error: {response.text}"
+    else:
+        return 'Authorization code not received.'
 
 @app.route('/logout')
 def logout():
-    session.pop('strava_token', None)
-    return redirect(url_for('index'))
+    session.pop('access_token', None)
+    session.pop('refresh_token', None)
+    return redirect(url_for('login'))
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
     if request.method == 'GET':
         verify_token = request.args.get('hub.verify_token')
         challenge = request.args.get('hub.challenge')
-        if verify_token == VERIFY_TOKEN:
+        if verify_token == 'STRAVA':
             return jsonify({'hub.challenge': challenge})
         return 'Invalid verification token', 403
     elif request.method == 'POST':
@@ -66,7 +111,7 @@ def webhook():
 
 def handle_activity_create(activity_id):
     headers = {
-        'Authorization': f'Bearer {os.getenv('STRAVA_ACCESS_TOKEN')}'
+        'Authorization': f'Bearer {session["access_token"]}'
     }
 
     response = requests.get(
@@ -110,14 +155,14 @@ def handle_activity_create(activity_id):
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
 
 def calculate_days_run_this_year(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    today = datetime.today()
+    start_of_year = datetime(today.year, 1, 1)
 
     run_dates = set()
 
     for activity in activities:
         if activity['type'] == 'Run':
-            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            run_date = datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
             if run_date >= start_of_year.date():
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")

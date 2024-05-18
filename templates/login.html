@@ -3,11 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Auth</title>
+    <title>Signup With Strava</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .btn-primary {
+            background-color: #1E88E5;
+            border-color: #1E88E5;
+        }
+
+        .btn-primary:hover {
+            background-color: #0d47a1;
+            border-color: #0d47a1;
+        }
+    </style>
 </head>
 <body>
-    <h1>Login with Strava</h1>
-    <a href="{{ url_for('login') }}">Login</a>
+    <div class="container">
+        <h1>Strava Data App</h1>
+        <p>To get started, sign up with Strava:</p>
+        <a href="/login" class="btn btn-primary">SIGN UP WITH STRAVA</a>
+    </div>
 </body>
 </html>
-
