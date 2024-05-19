@@ -5,36 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Data App</title>
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .btn-primary {
+            background-color: #1E88E5;
+            border-color: #1E88E5;
+        }
+
+        .btn-primary:hover {
+            background-color: #0d47a1;
+            border-color: #0d47a1;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Welcome to Strava Data App</h1>
         <p>You are successfully logged in.</p>
         <p>Your description will now give you a running tally of how many days you've run so far this year!</p>
-        <p>Your description will also show how many kms you've run this year and your average kms per week for the last 4 weeks including the day of this upload!</p>
+        <p>Total kilometers run this year and average kilometers per week for the last 4 weeks will also be included if you choose.</p>
 
-        <form action="/update_preferences" method="post">
+        <form method="post">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="days_run" name="days_run" {% if preferences.days_run %}checked{% endif %}>
+                <input class="form-check-input" type="checkbox" id="days_run" name="days_run" {% if user_data.days_run %}checked{% endif %}>
                 <label class="form-check-label" for="days_run">Days run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="total_kms" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
-                <label class="form-check-label" for="total_kms">Total kms run this year</label>
+                <input class="form-check-input" type="checkbox" id="total_kms" name="total_kms" {% if user_data.total_kms %}checked{% endif %}>
+                <label class="form-check-label" for="total_kms">Total kilometers run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="avg_kms" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
-                <label class="form-check-label" for="avg_kms">Average kms per week (last 4 weeks)</label>
+                <input class="form-check-input" type="checkbox" id="avg_kms" name="avg_kms" {% if user_data.avg_kms %}checked{% endif %}>
+                <label class="form-check-label" for="avg_kms">Average kilometers per week (last 4 weeks)</label>
             </div>
+            {% if not user_data.paid_user %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="paid_feature" name="paid_feature" disabled>
+                <label class="form-check-label" for="paid_feature">Paid Feature (Subscribe to enable)</label>
+            </div>
+            <p><a href="/create-checkout-session" class="btn btn-primary">Subscribe for $5/month</a></p>
+            {% endif %}
             <button type="submit" class="btn btn-primary">Update Selection</button>
         </form>
 
-        {% if update_success %}
-            <p>Update successful.</p>
+        {% if user_data.paid_user %}
+        <p>You are a paid user. <a href="/cancel-subscription" class="btn btn-danger">Cancel Subscription</a></p>
         {% endif %}
-
-        <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
-        <p>For all enquiries, contact us at klay@simplifiedanalytics.com.au</p>
     </div>
 </body>
 </html>
