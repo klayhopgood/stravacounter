@@ -29,7 +29,7 @@ def get_db_connection():
 
 @app.route('/')
 def home():
-    return render_template('login.html')
+    return render_template('signup.html')
 
 @app.route('/login')
 def login():
@@ -85,23 +85,18 @@ def deauthorize():
     else:
         return redirect('/')
 
-@app.route('/contact')
-def contact():
-    return render_template('contact.html')
-
 def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO strava_tokens (athlete_id, owner_id, access_token, refresh_token, expires_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO strava_tokens (athlete_id, access_token, refresh_token, expires_at)
+            VALUES (%s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 access_token = VALUES(access_token),
                 refresh_token = VALUES(refresh_token),
-                expires_at = VALUES(expires_at),
-                owner_id = VALUES(owner_id)
-        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
+                expires_at = VALUES(expires_at)
+        """, (athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -111,11 +106,11 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         if connection:
             connection.close()
 
-def get_tokens_from_db(owner_id):
+def get_tokens_from_db(athlete_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE owner_id = %s", (owner_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
@@ -141,14 +136,14 @@ def webhook():
             handle_activity_create(event['object_id'], event['owner_id'])
         return 'Event received', 200
 
-def handle_activity_create(activity_id, owner_id):
-    if not owner_id:
-        print("No owner_id in the request")
+def handle_activity_create(activity_id, athlete_id):
+    if not athlete_id:
+        print("No athlete_id in the request")
         return
 
-    tokens = get_tokens_from_db(owner_id)
+    tokens = get_tokens_from_db(athlete_id)
     if not tokens:
-        print(f"No tokens found for owner_id {owner_id}")
+        print(f"No tokens found for athlete_id {athlete_id}")
         return
 
     access_token = tokens['access_token']
@@ -170,7 +165,6 @@ def handle_activity_create(activity_id, owner_id):
 
     activities = response.json()
     days_run, total_days = calculate_days_run_this_year(activities)
-    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
 
     # Get the activity to update
     activity_response = requests.get(
@@ -184,8 +178,17 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
+    # Calculate additional statistics
+    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+
     # Update the description
-    new_description = f"{activity.get('description', '')}\nDays run this year: {days_run}/{total_days}\nTotal kilometers run this year: {total_kms_run:.1f} km\nAverage kilometers per week (last 4 weeks): {avg_kms_per_week:.1f} km"
+    new_description = (
+        f"{activity.get('description', '')}\n"
+        f"Days run this year: {days_run}/{total_days}\n"
+        f"Total kms run this year: {total_kms_run:.1f} km\n"
+        f"Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km"
+    )
+
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
@@ -219,20 +222,23 @@ def calculate_kms_stats(activities):
     today = datetime.datetime.today()
     start_of_year = datetime.datetime(today.year, 1, 1)
 
-    total_kms_run = 0
+    total_kms = 0
     kms_last_4_weeks = 0
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
-            distance_km = activity['distance'] / 1000  # Convert meters to kilometers
-            if activity_date.date() >= start_of_year.date():
-                total_kms_run += distance_km
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').replace(tzinfo=None)
+            distance_km = activity['distance'] / 1000.0  # Convert from meters to kilometers
+
+            if activity_date >= start_of_year:
+                total_kms += distance_km
+
             if today - datetime.timedelta(weeks=4) <= activity_date <= today:
                 kms_last_4_weeks += distance_km
 
     avg_kms_per_week = kms_last_4_weeks / 4
-    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
+
+    return round(total_kms, 1), round(avg_kms_per_week, 1)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
