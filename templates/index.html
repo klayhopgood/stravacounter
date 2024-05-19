@@ -11,32 +11,30 @@
         <h1>Welcome to Strava Data App</h1>
         <p>You are successfully logged in.</p>
         <p>Your description will now give you a running tally of how many days you've run so far this year!</p>
+        <p>Your description will also show how many kms you've run this year and your average kms per week for the last 4 weeks including the day of this upload!</p>
 
-        <form id="preferencesForm" method="POST" action="/update_preferences">
+        <form action="/update_preferences" method="post">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="daysRun" name="daysRun" checked>
-                <label class="form-check-label" for="daysRun">Days run this year</label>
+                <input class="form-check-input" type="checkbox" id="days_run" name="days_run" {% if preferences.days_run %}checked{% endif %}>
+                <label class="form-check-label" for="days_run">Days run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="totalKms" name="totalKms" checked>
-                <label class="form-check-label" for="totalKms">Total kms run this year</label>
+                <input class="form-check-input" type="checkbox" id="total_kms" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
+                <label class="form-check-label" for="total_kms">Total kms run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="avgKms" name="avgKms" checked>
-                <label class="form-check-label" for="avgKms">Average kms per week (last 4 weeks)</label>
+                <input class="form-check-input" type="checkbox" id="avg_kms" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
+                <label class="form-check-label" for="avg_kms">Average kms per week (last 4 weeks)</label>
             </div>
-            <button type="submit" class="btn btn-primary" style="display:none;" id="updateButton">Update Selection</button>
+            <button type="submit" class="btn btn-primary">Update Selection</button>
         </form>
 
-        <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
-    </div>
+        {% if update_success %}
+            <p>Update successful.</p>
+        {% endif %}
 
-    <script>
-        document.querySelectorAll('.form-check-input').forEach((checkbox) => {
-            checkbox.addEventListener('change', () => {
-                document.getElementById('updateButton').style.display = 'block';
-            });
-        });
-    </script>
+        <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
+        <p>For all enquiries, contact us at klay@simplifiedanalytics.com.au</p>
+    </div>
 </body>
 </html>
