@@ -61,7 +61,7 @@ def login_callback():
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
 
-            save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
+            upsert_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
             return render_template('index.html')
         else:
             return 'Failed to login. Error: ' + response.text
@@ -85,7 +85,7 @@ def deauthorize():
     else:
         return redirect('/')
 
-def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
+def upsert_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
