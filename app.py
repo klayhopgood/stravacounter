@@ -90,13 +90,14 @@ def upsert_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO strava_tokens (athlete_id, access_token, refresh_token, expires_at)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO strava_tokens (athlete_id, owner_id, access_token, refresh_token, expires_at)
+            VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 access_token = VALUES(access_token),
                 refresh_token = VALUES(refresh_token),
-                expires_at = VALUES(expires_at)
-        """, (athlete_id, access_token, refresh_token, expires_at))
+                expires_at = VALUES(expires_at),
+                owner_id = VALUES(owner_id)
+        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -219,26 +220,23 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    today = datetime.datetime.now(datetime.timezone.utc)
+    start_of_year = datetime.datetime(today.year, 1, 1, tzinfo=datetime.timezone.utc)
 
-    total_kms = 0
-    kms_last_4_weeks = 0
+    total_kms_run = 0
+    weekly_kms = [0] * 4  # Track kms for the last 4 weeks
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').replace(tzinfo=None)
-            distance_km = activity['distance'] / 1000.0  # Convert from meters to kilometers
-
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
             if activity_date >= start_of_year:
-                total_kms += distance_km
+                total_kms_run += activity['distance'] / 1000  # Convert meters to kilometers
+                if today - datetime.timedelta(weeks=4) <= activity_date <= today:
+                    week_num = (today - activity_date).days // 7
+                    weekly_kms[week_num] += activity['distance'] / 1000
 
-            if today - datetime.timedelta(weeks=4) <= activity_date <= today:
-                kms_last_4_weeks += distance_km
-
-    avg_kms_per_week = kms_last_4_weeks / 4
-
-    return round(total_kms, 1), round(avg_kms_per_week, 1)
+    avg_kms_per_week = sum(weekly_kms) / 4
+    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
