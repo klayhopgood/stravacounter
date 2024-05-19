@@ -5,42 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Data App</title>
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            margin-top: 0;
-        }
-
-        .footer {
-            margin-top: 20px;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <h1>Welcome to Strava Data App</h1>
         <p>You are successfully logged in.</p>
         <p>Your description will now give you a running tally of how many days you've run so far this year!</p>
-        <p>Your description will also include how many kilometers you've run for the year and your average kilometers per week for the previous 4 weeks including the day of this upload!</p>
+
+        <form id="preferencesForm" method="POST" action="/update_preferences">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="daysRun" name="daysRun" checked>
+                <label class="form-check-label" for="daysRun">Days run this year</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="totalKms" name="totalKms" checked>
+                <label class="form-check-label" for="totalKms">Total kms run this year</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="avgKms" name="avgKms" checked>
+                <label class="form-check-label" for="avgKms">Average kms per week (last 4 weeks)</label>
+            </div>
+            <button type="submit" class="btn btn-primary" style="display:none;" id="updateButton">Update Selection</button>
+        </form>
+
         <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
-        <div class="footer">
-            <a href="/contact" class="btn btn-link">Contact Us</a>
-        </div>
     </div>
+
+    <script>
+        document.querySelectorAll('.form-check-input').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                document.getElementById('updateButton').style.display = 'block';
+            });
+        });
+    </script>
 </body>
 </html>

@@ -90,14 +90,17 @@ def upsert_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO strava_tokens (athlete_id, owner_id, access_token, refresh_token, expires_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO strava_tokens (athlete_id, owner_id, access_token, refresh_token, expires_at, days_run, total_kms, avg_kms)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 access_token = VALUES(access_token),
                 refresh_token = VALUES(refresh_token),
                 expires_at = VALUES(expires_at),
-                owner_id = VALUES(owner_id)
-        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
+                owner_id = VALUES(owner_id),
+                days_run = VALUES(days_run),
+                total_kms = VALUES(total_kms),
+                avg_kms = VALUES(avg_kms)
+        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at, True, True, True))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -166,6 +169,10 @@ def handle_activity_create(activity_id, athlete_id):
 
     activities = response.json()
     days_run, total_days = calculate_days_run_this_year(activities)
+    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+
+    # Get the user's preferences
+    preferences = get_user_preferences(athlete_id)
 
     # Get the activity to update
     activity_response = requests.get(
@@ -179,16 +186,15 @@ def handle_activity_create(activity_id, athlete_id):
 
     activity = activity_response.json()
 
-    # Calculate additional statistics
-    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+    # Update the description based on the user's preferences
+    new_description = activity.get('description', '')
 
-    # Update the description
-    new_description = (
-        f"{activity.get('description', '')}\n"
-        f"Days run this year: {days_run}/{total_days}\n"
-        f"Total kms run this year: {total_kms_run:.1f} km\n"
-        f"Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km"
-    )
+    if preferences['days_run']:
+        new_description += f"Days run this year: {days_run}/{total_days}\n"
+    if preferences['total_kms']:
+        new_description += f"Total kms run this year: {total_kms_run:.1f} km\n"
+    if preferences['avg_kms']:
+        new_description += f"Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km"
 
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
@@ -200,6 +206,25 @@ def handle_activity_create(activity_id, athlete_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
+def get_user_preferences(athlete_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT days_run, total_kms, avg_kms
+            FROM strava_tokens
+            WHERE athlete_id = %s
+        """, (athlete_id,))
+        preferences = cursor.fetchone()
+        cursor.close()
+        return preferences
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return {'days_run': True, 'total_kms': True, 'avg_kms': True}
+    finally:
+        if connection:
+            connection.close()
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
@@ -220,23 +245,55 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.now(datetime.timezone.utc)
-    start_of_year = datetime.datetime(today.year, 1, 1, tzinfo=datetime.timezone.utc)
+    today = datetime.datetime.now()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+    start_of_last_4_weeks = today - datetime.timedelta(weeks=4)
 
     total_kms_run = 0
-    weekly_kms = [0] * 4  # Track kms for the last 4 weeks
+    kms_last_4_weeks = 0
 
     for activity in activities:
         if activity['type'] == 'Run':
             activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
-            if activity_date >= start_of_year:
-                total_kms_run += activity['distance'] / 1000  # Convert meters to kilometers
-                if today - datetime.timedelta(weeks=4) <= activity_date <= today:
-                    week_num = (today - activity_date).days // 7
-                    weekly_kms[week_num] += activity['distance'] / 1000
+            distance_km = activity['distance'] / 1000  # Convert meters to kilometers
 
-    avg_kms_per_week = sum(weekly_kms) / 4
+            if activity_date >= start_of_year:
+                total_kms_run += distance_km
+
+            if start_of_last_4_weeks <= activity_date <= today:
+                kms_last_4_weeks += distance_km
+
+    avg_kms_per_week = kms_last_4_weeks / 4
     return round(total_kms_run, 1), round(avg_kms_per_week, 1)
+
+@app.route('/update_preferences', methods=['POST'])
+def update_preferences():
+    athlete_id = session.get('athlete_id')
+    if not athlete_id:
+        return redirect('/')
+
+    days_run = 'daysRun' in request.form
+    total_kms = 'totalKms' in request.form
+    avg_kms = 'avgKms' in request.form
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE strava_tokens
+            SET days_run = %s, total_kms = %s, avg_kms = %s
+            WHERE athlete_id = %s
+        """, (days_run, total_kms, avg_kms, athlete_id))
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+    return redirect('/')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
