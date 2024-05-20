@@ -5,71 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Data App</title>
     <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f8f9fa;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .container {
-            max-width: 500px;
-            margin: auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            margin-top: 0;
-        }
-
-        .btn-primary {
-            background-color: #1E88E5;
-            border-color: #1E88E5;
-        }
-
-        .btn-primary:hover {
-            background-color: #0d47a1;
-            border-color: #0d47a1;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <h1>Welcome to Strava Data App</h1>
         <p>You are successfully logged in.</p>
-        <p>Your description will now give you a running tally of how many days you've run so far this year!</p>
-        <p>Total kilometers run this year and average kilometers per week for the last 4 weeks will also be included if you choose.</p>
-
-        <form method="post">
+        <form action="/update_preferences" method="post">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="days_run" name="days_run" {% if user_data.days_run %}checked{% endif %}>
+                <input class="form-check-input" type="checkbox" name="days_run" id="days_run" checked>
                 <label class="form-check-label" for="days_run">Days run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="total_kms" name="total_kms" {% if user_data.total_kms %}checked{% endif %}>
-                <label class="form-check-label" for="total_kms">Total kilometers run this year</label>
+                <input class="form-check-input" type="checkbox" name="total_kms" id="total_kms" checked>
+                <label class="form-check-label" for="total_kms">Total kms run this year</label>
             </div>
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="avg_kms" name="avg_kms" {% if user_data.avg_kms %}checked{% endif %}>
-                <label class="form-check-label" for="avg_kms">Average kilometers per week (last 4 weeks)</label>
+                <input class="form-check-input" type="checkbox" name="avg_kms" id="avg_kms" checked>
+                <label class="form-check-label" for="avg_kms">Average kms per week (last 4 weeks)</label>
             </div>
-            {% if not user_data.paid_user %}
+            {% if is_paid_user %}
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="paid_feature" name="paid_feature" disabled>
-                <label class="form-check-label" for="paid_feature">Paid Feature (Subscribe to enable)</label>
+                <input class="form-check-input" type="checkbox" name="total_elevation" id="total_elevation" {% if total_elevation %}checked{% endif %}>
+                <label class="form-check-label" for="total_elevation">Total elevation gain this year</label>
             </div>
-            <p><a href="/create-checkout-session" class="btn btn-primary">Subscribe for $5/month</a></p>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="avg_elevation" id="avg_elevation" {% if avg_elevation %}checked{% endif %}>
+                <label class="form-check-label" for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="avg_pace_year" id="avg_pace_year" {% if avg_pace_year %}checked{% endif %}>
+                <label class="form-check-label" for="avg_pace_year">Average pace per km this year</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="avg_pace_4weeks" id="avg_pace_4weeks" {% if avg_pace_4weeks %}checked{% endif %}>
+                <label class="form-check-label" for="avg_pace_4weeks">Average pace per km per week (last 4 weeks)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="beers_burnt" id="beers_burnt" {% if beers_burnt %}checked{% endif %}>
+                <label class="form-check-label" for="beers_burnt">Number of beers burnt</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="pizza_burnt" id="pizza_burnt" {% if pizza_burnt %}checked{% endif %}>
+                <label class="form-check-label" for="pizza_burnt">Number of pizza slices burnt</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="remove_try_free" id="remove_try_free" {% if remove_try_free %}checked{% endif %}>
+                <label class="form-check-label" for="remove_try_free">Remove "try for free at www.blah.com"</label>
+            </div>
+            {% else %}
+            <p>Additional data points are available for paid users:</p>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="total_elevation">Total elevation gain this year</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="avg_pace_year">Average pace per km this year</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="avg_pace_4weeks">Average pace per km per week (last 4 weeks)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="beers_burnt">Number of beers burnt</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="pizza_burnt">Number of pizza slices burnt</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" disabled>
+                <label class="form-check-label" for="remove_try_free">Remove "try for free at www.blah.com"</label>
+            </div>
+            <form action="/create-checkout-session" method="POST">
+                <button type="submit" class="btn btn-primary">Upgrade to Premium</button>
+            </form>
             {% endif %}
-            <button type="submit" class="btn btn-primary">Update Selection</button>
+            <button type="submit" class="btn btn-primary">Update Preferences</button>
         </form>
-
-        {% if user_data.paid_user %}
-        <p>You are a paid user. <a href="/cancel-subscription" class="btn btn-danger">Cancel Subscription</a></p>
-        {% endif %}
+        <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
+        <p>Contact us at <a href="mailto:klay@simplifiedanalytics.com.au">klay@simplifiedanalytics.com.au</a></p>
     </div>
 </body>
 </html>
