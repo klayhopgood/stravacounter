@@ -246,8 +246,8 @@ def calculate_days_run_this_year(activities):
 
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    today = datetime.datetime.now(datetime.timezone.utc)  # Make today timezone-aware
+    start_of_year = datetime.datetime(today.year, 1, 1, tzinfo=datetime.timezone.utc)  # Make start_of_year timezone-aware
 
     total_kms = 0
     kms_last_4_weeks = 0
@@ -263,6 +263,7 @@ def calculate_kms_stats(activities):
 
     avg_kms_per_week = kms_last_4_weeks / 4
     return round(total_kms, 1), round(avg_kms_per_week, 1)
+
 
 
 def calculate_elevation_stats(activities):
