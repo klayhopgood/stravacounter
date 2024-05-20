@@ -115,7 +115,7 @@ def get_tokens_from_db(athlete_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at, days_run, total_kms, avg_kms, paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at, days_run, total_kms, avg_kms, is_paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
@@ -220,7 +220,7 @@ def update_paid_status(athlete_id, is_paid):
         cursor = connection.cursor()
         cursor.execute("""
             UPDATE strava_tokens
-            SET paid_user = %s
+            SET is_paid_user = %s
             WHERE athlete_id = %s
         """, (is_paid, athlete_id))
         connection.commit()
