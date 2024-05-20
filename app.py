@@ -328,6 +328,7 @@ def handle_activity_create(activity_id, owner_id):
         print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
         return
 
+
     activity = activity_response.json()
 
     # Construct new description
