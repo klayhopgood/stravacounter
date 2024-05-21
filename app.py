@@ -5,9 +5,12 @@ import datetime
 from mysql.connector import errorcode
 import secrets
 from dateutil import parser
+from flask_session import Session  # Ensure you have flask-session installed
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
+app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+Session(app)
 
 # Strava credentials
 CLIENT_ID = '99652'  # Replace with your Strava client ID
@@ -57,6 +60,12 @@ def login_callback():
             expires_at = tokens.get('expires_at')
             athlete_id = str(tokens.get('athlete').get('id'))
 
+            # Debugging print statements
+            print(f"Access Token: {access_token}")
+            print(f"Refresh Token: {refresh_token}")
+            print(f"Expires At: {expires_at}")
+            print(f"Athlete ID: {athlete_id}")
+
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
@@ -70,6 +79,7 @@ def login_callback():
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
+
 
 
 @app.route('/deauthorize')
@@ -333,6 +343,7 @@ def get_user_preferences(owner_id):
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
+    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
     if not owner_id:
         return 'User not authenticated', 403
 
