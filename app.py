@@ -62,8 +62,9 @@ def login_callback():
             session['athlete_id'] = athlete_id
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
+
             preferences = get_user_preferences(athlete_id)
-            return render_template('index.html', preferences=preferences)
+            return render_template('index.html', is_paid_user=is_paid_user(athlete_id), preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
@@ -272,37 +273,38 @@ def get_user_preferences(athlete_id):
 
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
-    athlete_id = session.get('athlete_id')
-    if not athlete_id:
-        return redirect('/')
-
+    owner_id = session.get('athlete_id')
     preferences = {
         'days_run': 'days_run' in request.form,
         'total_kms': 'total_kms' in request.form,
         'avg_kms': 'avg_kms' in request.form,
         'total_elevation': 'total_elevation' in request.form,
         'avg_elevation': 'avg_elevation' in request.form,
+        'avg_pace': 'avg_pace' in request.form,
+        'avg_pace_per_week': 'avg_pace_per_week' in request.form,
         'beers_burnt': 'beers_burnt' in request.form,
         'pizza_slices_burnt': 'pizza_slices_burnt' in request.form,
-        'remove_ad': 'remove_ad' in request.form
+        'remove_promo': 'remove_promo' in request.form
     }
 
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO user_preferences (athlete_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, beers_burnt, pizza_slices_burnt, remove_ad)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 days_run = VALUES(days_run),
                 total_kms = VALUES(total_kms),
                 avg_kms = VALUES(avg_kms),
                 total_elevation = VALUES(total_elevation),
                 avg_elevation = VALUES(avg_elevation),
+                avg_pace = VALUES(avg_pace),
+                avg_pace_per_week = VALUES(avg_pace_per_week),
                 beers_burnt = VALUES(beers_burnt),
                 pizza_slices_burnt = VALUES(pizza_slices_burnt),
-                remove_ad = VALUES(remove_ad)
-        """, (athlete_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_ad']))
+                remove_promo = VALUES(remove_promo)
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -312,7 +314,7 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return redirect(url_for('login_callback', updated=True))
+    return render_template('index.html', is_paid_user=is_paid_user(owner_id), preferences=preferences, updated=True)
 
 def is_paid_user(athlete_id):
     try:
