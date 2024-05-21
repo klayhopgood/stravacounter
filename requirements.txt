@@ -9,3 +9,4 @@ mysql-connector-python
 stravalib
 stripe
 python-dateutil
+Flask-Session
