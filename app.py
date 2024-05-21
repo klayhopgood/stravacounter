@@ -187,14 +187,13 @@ def handle_activity_create(activity_id, owner_id):
     pizza_slices_burnt = total_calories_burnt / 285
 
     # Update the description
-    new_description = f"{activity.get('description', '')}\n" \
-                      f"Days run this year: {days_run}/{total_days}\n" \
-                      f"Total kms run this year: {total_kms_run:.1f} km\n" \
-                      f"Average kms per week: {avg_kms_per_week:.1f} km\n" \
-                      f"Total elevation gain this year: {total_elevation:.1f} m\n" \
-                      f"Average elevation per week: {avg_elevation_per_week:.1f} m\n" \
-                      f"Beers burnt: {beers_burnt:.1f}\n" \
-                      f"Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
+    new_description = f"🌍 Days run this year: {days_run}/{total_days}\n" \
+                      f"🏃 Total kms run this year: {total_kms_run:.1f} km\n" \
+                      f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n" \
+                      f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n" \
+                      f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n" \
+                      f"🍺 Beers burnt: {beers_burnt:.1f}\n" \
+                      f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
                       f"Try for free at www.blah.com"
 
     update_response = requests.put(
@@ -228,45 +227,39 @@ def calculate_days_run_this_year(activities):
 
 def calculate_kms_stats(activities):
     today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
 
     total_kms_run = 0.0
-    kms_per_week = {}
+    kms_last_4_weeks = 0.0
 
     for activity in activities:
         if activity['type'] == 'Run':
             activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_year.date():
-                week = activity_date.isocalendar()[1]
-                kms_per_week[week] = kms_per_week.get(week, 0) + activity['distance'] / 1000
+            if activity_date >= start_of_4_weeks_ago.date():
+                kms_last_4_weeks += activity['distance'] / 1000
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
                 total_kms_run += activity['distance'] / 1000
 
-    # Filter for the last 4 weeks
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-    last_4_weeks_kms = [kms_per_week.get((today - datetime.timedelta(days=i)).isocalendar()[1], 0) for i in range(28)]
-    avg_kms_per_week = sum(last_4_weeks_kms) / 4
+    avg_kms_per_week = kms_last_4_weeks / 4
 
     return round(total_kms_run, 1), round(avg_kms_per_week, 1)
 
 def calculate_elevation_stats(activities):
     today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
 
     total_elevation = 0.0
-    elevation_per_week = {}
+    elevation_last_4_weeks = 0.0
 
     for activity in activities:
         if activity['type'] == 'Run':
             activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_year.date():
-                week = activity_date.isocalendar()[1]
-                elevation_per_week[week] = elevation_per_week.get(week, 0) + activity['total_elevation_gain']
+            if activity_date >= start_of_4_weeks_ago.date():
+                elevation_last_4_weeks += activity['total_elevation_gain']
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
                 total_elevation += activity['total_elevation_gain']
 
-    # Filter for the last 4 weeks
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-    last_4_weeks_elevation = [elevation_per_week.get((today - datetime.timedelta(days=i)).isocalendar()[1], 0) for i in range(28)]
-    avg_elevation_per_week = sum(last_4_weeks_elevation) / 4
+    avg_elevation_per_week = elevation_last_4_weeks / 4
 
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
