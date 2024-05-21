@@ -3,102 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Uploader</title>
+    <title>Strava Preferences</title>
+    <style>
+        .updated-message {
+            display: none;
+            color: green;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to Strava Uploader</h1>
-    <form action="/update_preferences" method="post">
-        <div>
-            <input type="checkbox" id="days_run" name="days_run" checked>
-            <label for="days_run">Days run this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="total_kms" name="total_kms" checked>
-            <label for="total_kms">Total kms run this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_kms" name="avg_kms" checked>
-            <label for="avg_kms">Average kms per week (last 4 weeks)</label>
-        </div>
-
-        {% if is_paid_user %}
-        <h3>Paid Features</h3>
-        <div>
-            <input type="checkbox" id="total_elevation" name="total_elevation">
-            <label for="total_elevation">Total elevation gain this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_elevation" name="avg_elevation">
-            <label for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_pace" name="avg_pace">
-            <label for="avg_pace">Average pace this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week">
-            <label for="avg_pace_per_week">Average pace per week (last 4 weeks)</label>
-        </div>
-        <div>
-            <input type="checkbox" id="beers_burnt" name="beers_burnt">
-            <label for="beers_burnt">Number of beers burnt</label>
-        </div>
-        <div>
-            <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt">
-            <label for="pizza_slices_burnt">Number of pizza slices burnt</label>
-        </div>
-        <div>
-            <input type="checkbox" id="remove_promo" name="remove_promo">
-            <label for="remove_promo">Remove promotional message</label>
-        </div>
-        {% else %}
-        <h3>Paid Features</h3>
-        <div>
-            <input type="checkbox" id="total_elevation" name="total_elevation" disabled>
-            <label for="total_elevation">Total elevation gain this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_elevation" name="avg_elevation" disabled>
-            <label for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_pace" name="avg_pace" disabled>
-            <label for="avg_pace">Average pace this year</label>
-        </div>
-        <div>
-            <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week" disabled>
-            <label for="avg_pace_per_week">Average pace per week (last 4 weeks)</label>
-        </div>
-        <div>
-            <input type="checkbox" id="beers_burnt" name="beers_burnt" disabled>
-            <label for="beers_burnt">Number of beers burnt</label>
-        </div>
-        <div>
-            <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt" disabled>
-            <label for="pizza_slices_burnt">Number of pizza slices burnt</label>
-        </div>
-        <div>
-            <input type="checkbox" id="remove_promo" name="remove_promo" disabled>
-            <label for="remove_promo">Remove promotional message</label>
-        </div>
-        <div>
-            <form action="/create_checkout_session" method="POST">
-                <button type="submit">Upgrade to Premium</button>
-            </form>
-        </div>
-        {% endif %}
-
-        <div>
-            <button type="submit">Update Preferences</button>
-        </div>
+    <h1>Strava Preferences</h1>
+    <form action="{{ url_for('update_preferences') }}" method="POST">
+        <label>
+            <input type="checkbox" name="days_run" {% if preferences.days_run %}checked{% endif %}>
+            Days run this year
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
+            Total kms run this year
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
+            Average kms per week (last 4 weeks)
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %}>
+            Total elevation gain this year
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %}>
+            Average elevation per week (last 4 weeks)
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %}>
+            Average pace per km this year
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %}>
+            Average pace per km per week (last 4 weeks)
+        </label><br>
+        <label>
+            <input type="checkbox" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %}>
+            Beers burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}>
+            Pizza slices burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %}>
+            Remove promo message
+        </label><br>
+        <button type="submit">Submit Changes</button>
     </form>
+    <p class="updated-message">Preferences updated</p>
 
-    {% if updated %}
-    <p>Preferences updated successfully.</p>
-    {% endif %}
-
-    <footer>
-        <p><a href="/contact">Contact Us</a></p>
-    </footer>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const updated = urlParams.get('updated');
+        if (updated) {
+            const message = document.querySelector('.updated-message');
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+    </script>
 </body>
 </html>

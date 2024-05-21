@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify, render_template, session
+from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import requests
 import mysql.connector
 import datetime
@@ -10,7 +10,7 @@ app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
 
 # Strava credentials
 CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your actual client secret
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
@@ -29,11 +29,11 @@ def get_db_connection():
 
 @app.route('/')
 def home():
-    return render_template('signup.html')
+    return render_template('login.html')
 
 @app.route('/login')
 def login():
-    redirect_uri = request.base_url + '/callback'
+    redirect_uri = url_for('login_callback', _external=True)
     authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
@@ -62,7 +62,8 @@ def login_callback():
             session['athlete_id'] = athlete_id
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
-            return render_template('index.html', is_paid_user=is_paid_user(athlete_id), **get_user_preferences(athlete_id))
+            preferences = get_user_preferences(athlete_id)
+            return render_template('index.html', is_paid_user=is_paid_user(athlete_id), preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
@@ -361,7 +362,7 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return render_template('index.html', is_paid_user=is_paid_user(owner_id), **preferences, updated=True)
+    return render_template('index.html', is_paid_user=is_paid_user(owner_id), preferences=preferences, updated=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
