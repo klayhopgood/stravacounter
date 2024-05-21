@@ -4,6 +4,7 @@ import mysql.connector
 import datetime
 from mysql.connector import errorcode
 import secrets
+from dateutil import parser
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
@@ -182,20 +183,32 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
+    # Fetch user preferences
+    preferences = get_user_preferences(owner_id)
+
     # Calculate calories burnt for this activity
     total_calories_burnt = activity.get('calories', 0)
     beers_burnt = total_calories_burnt / 140
     pizza_slices_burnt = total_calories_burnt / 285
 
-    # Update the description
-    new_description = f"🌍 Days run this year: {days_run}/{total_days}\n" \
-                      f"🏃 Total kms run this year: {total_kms_run:.1f} km\n" \
-                      f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n" \
-                      f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n" \
-                      f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n" \
-                      f"🍺 Beers burnt: {beers_burnt:.1f}\n" \
-                      f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
-                      f"Try for free at www.blah.com"
+    # Build the new description based on preferences
+    new_description = ""
+    if preferences.get('days_run', True):
+        new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
+    if preferences.get('total_kms', True):
+        new_description += f"🏃 Total kms run this year: {total_kms_run:.1f} km\n"
+    if preferences.get('avg_kms', True):
+        new_description += f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n"
+    if preferences.get('total_elevation', False):
+        new_description += f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n"
+    if preferences.get('avg_elevation', False):
+        new_description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n"
+    if preferences.get('beers_burnt', False):
+        new_description += f"🍺 Beers burnt: {beers_burnt:.1f}\n"
+    if preferences.get('pizza_slices_burnt', False):
+        new_description += f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n"
+    if not preferences.get('remove_promo', False):
+        new_description += "Try for free at www.blah.com"
 
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
