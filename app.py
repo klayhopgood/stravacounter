@@ -236,8 +236,8 @@ def calculate_kms_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local'])
-            if activity_date >= start_of_year:
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_year.date():
                 week = activity_date.isocalendar()[1]
                 kms_per_week[week] = kms_per_week.get(week, 0) + activity['distance'] / 1000
                 total_kms_run += activity['distance'] / 1000
@@ -255,8 +255,8 @@ def calculate_elevation_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local'])
-            if activity_date >= start_of_year:
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_year.date():
                 week = activity_date.isocalendar()[1]
                 elevation_per_week[week] = elevation_per_week.get(week, 0) + activity['total_elevation_gain']
                 total_elevation += activity['total_elevation_gain']
@@ -275,8 +275,8 @@ def calculate_pace_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local'])
-            if activity_date >= start_of_year:
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_year.date():
                 week = activity_date.isocalendar()[1]
                 total_time += activity['moving_time']
                 total_distance += activity['distance'] / 1000
