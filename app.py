@@ -2,6 +2,7 @@ from flask import Flask, request, redirect, jsonify, render_template, session
 import requests
 import mysql.connector
 import datetime
+from dateutil import parser
 import secrets
 
 app = Flask(__name__)
@@ -216,7 +217,7 @@ def calculate_days_run_this_year(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            run_date = parser.parse(activity['start_date_local']).date()
             if run_date >= start_of_year.date():
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")
@@ -235,7 +236,7 @@ def calculate_kms_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            activity_date = parser.parse(activity['start_date_local'])
             if activity_date >= start_of_year:
                 week = activity_date.isocalendar()[1]
                 kms_per_week[week] = kms_per_week.get(week, 0) + activity['distance'] / 1000
@@ -254,7 +255,7 @@ def calculate_elevation_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            activity_date = parser.parse(activity['start_date_local'])
             if activity_date >= start_of_year:
                 week = activity_date.isocalendar()[1]
                 elevation_per_week[week] = elevation_per_week.get(week, 0) + activity['total_elevation_gain']
@@ -274,7 +275,7 @@ def calculate_pace_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            activity_date = parser.parse(activity['start_date_local'])
             if activity_date >= start_of_year:
                 week = activity_date.isocalendar()[1]
                 total_time += activity['moving_time']
