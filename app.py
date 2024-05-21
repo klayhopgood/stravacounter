@@ -170,8 +170,8 @@ def handle_activity_create(activity_id, owner_id):
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
     avg_pace, avg_pace_per_week = calculate_pace_stats(activities)
     total_calories_burnt = calculate_calories_burnt(activities)
-    beers_burnt = total_calories_burnt // 43
-    pizza_slices_burnt = total_calories_burnt // 285
+    beers_burnt = total_calories_burnt / 140
+    pizza_slices_burnt = total_calories_burnt / 285
 
     # Get the activity to update
     activity_response = requests.get(
@@ -188,14 +188,14 @@ def handle_activity_create(activity_id, owner_id):
     # Update the description
     new_description = f"{activity.get('description', '')}\n" \
                       f"Days run this year: {days_run}/{total_days}\n" \
-                      f"Total kms run this year: {total_kms_run:.2f} km\n" \
-                      f"Average kms per week: {avg_kms_per_week:.2f} km\n" \
-                      f"Total elevation gain this year: {total_elevation:.2f} m\n" \
-                      f"Average elevation per week: {avg_elevation_per_week:.2f} m\n" \
-                      f"Average pace this year: {avg_pace:.2f} min/km\n" \
-                      f"Average pace per week: {avg_pace_per_week:.2f} min/km\n" \
-                      f"Beers burnt: {beers_burnt}\n" \
-                      f"Pizza slices burnt: {pizza_slices_burnt}\n" \
+                      f"Total kms run this year: {total_kms_run:.1f} km\n" \
+                      f"Average kms per week: {avg_kms_per_week:.1f} km\n" \
+                      f"Total elevation gain this year: {total_elevation:.1f} m\n" \
+                      f"Average elevation per week: {avg_elevation_per_week:.1f} m\n" \
+                      f"Average pace this year: {avg_pace:.1f} min/km\n" \
+                      f"Average pace per week: {avg_pace_per_week:.1f} min/km\n" \
+                      f"Beers burnt: {beers_burnt:.1f}\n" \
+                      f"Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
                       f"Try for free at www.blah.com"
 
     update_response = requests.put(
@@ -242,9 +242,13 @@ def calculate_kms_stats(activities):
                 kms_per_week[week] = kms_per_week.get(week, 0) + activity['distance'] / 1000
                 total_kms_run += activity['distance'] / 1000
 
-    avg_kms_per_week = total_kms_run / len(kms_per_week) if kms_per_week else 0
+    # Filter for the last 4 weeks
+    last_4_weeks = [today - datetime.timedelta(weeks=i) for i in range(4)]
+    last_4_weeks_numbers = [date.isocalendar()[1] for date in last_4_weeks]
+    last_4_weeks_kms = [kms_per_week.get(week, 0) for week in last_4_weeks_numbers]
+    avg_kms_per_week = sum(last_4_weeks_kms) / 4
 
-    return total_kms_run, avg_kms_per_week
+    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
 
 def calculate_elevation_stats(activities):
     today = datetime.datetime.today()
@@ -261,9 +265,13 @@ def calculate_elevation_stats(activities):
                 elevation_per_week[week] = elevation_per_week.get(week, 0) + activity['total_elevation_gain']
                 total_elevation += activity['total_elevation_gain']
 
-    avg_elevation_per_week = total_elevation / len(elevation_per_week) if elevation_per_week else 0
+    # Filter for the last 4 weeks
+    last_4_weeks = [today - datetime.timedelta(weeks=i) for i in range(4)]
+    last_4_weeks_numbers = [date.isocalendar()[1] for date in last_4_weeks]
+    last_4_weeks_elevation = [elevation_per_week.get(week, 0) for week in last_4_weeks_numbers]
+    avg_elevation_per_week = sum(last_4_weeks_elevation) / 4
 
-    return total_elevation, avg_elevation_per_week
+    return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
 def calculate_pace_stats(activities):
     today = datetime.datetime.today()
@@ -282,10 +290,16 @@ def calculate_pace_stats(activities):
                 total_distance += activity['distance'] / 1000
                 pace_per_week[week] = pace_per_week.get(week, 0) + (activity['moving_time'] / (activity['distance'] / 1000))
 
-    avg_pace = (total_time / 60) / total_distance if total_distance > 0 else 0
-    avg_pace_per_week = (sum(pace_per_week.values()) / len(pace_per_week)) / 60 if pace_per_week else 0
+    # Filter for the last 4 weeks
+    last_4_weeks = [today - datetime.timedelta(weeks=i) for i in range(4)]
+    last_4_weeks_numbers = [date.isocalendar()[1] for date in last_4_weeks]
+    last_4_weeks_pace = [pace_per_week.get(week, 0) for week in last_4_weeks_numbers]
+    avg_pace_per_week = sum(last_4_weeks_pace) / len(last_4_weeks_pace) if last_4_weeks_pace else 0
 
-    return avg_pace, avg_pace_per_week
+    avg_pace = (total_time / 60) / total_distance if total_distance > 0 else 0
+    avg_pace_per_week = avg_pace_per_week / 60 if avg_pace_per_week > 0 else 0
+
+    return round(avg_pace, 1), round(avg_pace_per_week, 1)
 
 def calculate_calories_burnt(activities):
     total_calories = 0
