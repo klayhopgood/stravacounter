@@ -8,12 +8,12 @@ import stripe
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
-VERIFY_TOKEN = 'STRAVA'
-STRIPE_SECRET_KEY = 'YOUR_STRIPE_SECRET_KEY'
-STRIPE_WEBHOOK_SECRET = 'YOUR_STRIPE_WEBHOOK_SECRET'
-REDIRECT_URI = 'https://plankton-app-fdt3l.ondigitalocean.app/authorize'
+# Load configuration from environment variables or directly set them
+CLIENT_ID = '99652'
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
+STRIPE_SECRET_KEY = 'sk_test_51NODfYJMPCTLT0UxdiGMK4PPOzA6pnVi1NejzSusKTIx3bJvvo7Pht4bGZjHMH5FUwMnbLH3024pXAaSsQrA9twi00qt305QGu'
+STRIPE_WEBHOOK_SECRET = 'we_1PIEPSJMPCTLT0Ux2cgjZvQ4'
+REDIRECT_URI = 'https://plankton-app-fdt3l.ondigitalocean.app/login/callback'
 
 stripe.api_key = STRIPE_SECRET_KEY
 
@@ -111,7 +111,7 @@ def calculate_kms_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S')
+            activity_date = datetime.datetime.strptime(activity['start_date_local'].replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
             if activity_date >= start_of_year:
                 total_kms += activity['distance'] / 1000
                 if today - datetime.timedelta(weeks=4) <= activity_date <= today:
@@ -130,7 +130,7 @@ def calculate_elevation_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S')
+            activity_date = datetime.datetime.strptime(activity['start_date_local'].replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
             if activity_date >= start_of_year:
                 total_elevation += activity['total_elevation_gain']
                 if today - datetime.timedelta(weeks=4) <= activity_date <= today:
@@ -151,7 +151,7 @@ def calculate_pace_stats(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S')
+            activity_date = datetime.datetime.strptime(activity['start_date_local'].replace('Z', ''), '%Y-%m-%dT%H:%M:%S')
             if activity_date >= start_of_year:
                 total_time += activity['moving_time']
                 total_distance += activity['distance']
@@ -160,24 +160,22 @@ def calculate_pace_stats(activities):
                     weeks_data_distance += activity['distance']
 
     avg_pace = (total_time / 60) / (total_distance / 1000) if total_distance > 0 else 0  # Pace in min/km
-    avg_pace_per_week = (weeks_data_time / 60) / (weeks_data_distance / 1000) if weeks_data_distance > 0 else 0  # Pace in min/km
+    avg_pace_per_week = (weeks_data_time / 60) / (weeks_data_distance / 1000) if weeks_data_distance > 0 else 0
 
-    return round(avg_pace, 1), round(avg_pace_per_week, 1)
+    return round(avg_pace, 2), round(avg_pace_per_week, 2)
 
 def calculate_calories(activities):
     total_calories = 0
-
     for activity in activities:
         if activity['type'] == 'Run':
-            total_calories += activity['calories']
-
+            total_calories += activity.get('calories', 0)
     return total_calories
 
 def get_tokens(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE owner_id = %s", (owner_id,))
+        cursor.execute("SELECT * FROM strava_tokens WHERE owner_id = %s", (owner_id,))
         return cursor.fetchone()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -188,15 +186,6 @@ def get_tokens(owner_id):
         if connection:
             connection.close()
 
-def get_all_activities(access_token):
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
-    response = requests.get('https://www.strava.com/api/v3/athlete/activities', headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    return []
-
 def get_user_preferences(owner_id):
     try:
         connection = get_db_connection()
@@ -204,7 +193,18 @@ def get_user_preferences(owner_id):
         cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
         if result:
-            return result
+            return {
+                'days_run': result.get('days_run', True),
+                'total_kms': result.get('total_kms', True),
+                'avg_kms': result.get('avg_kms', True),
+                'total_elevation': result.get('total_elevation', False),
+                'avg_elevation': result.get('avg_elevation', False),
+                'avg_pace': result.get('avg_pace', False),
+                'avg_pace_per_week': result.get('avg_pace_per_week', False),
+                'beers_burnt': result.get('beers_burnt', False),
+                'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
+                'remove_promo': result.get('remove_promo', False)
+            }
         else:
             return {
                 'days_run': True,
@@ -230,9 +230,6 @@ def get_user_preferences(owner_id):
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
-    if not owner_id:
-        return redirect('/')
-
     preferences = {
         'days_run': 'days_run' in request.form,
         'total_kms': 'total_kms' in request.form,
@@ -382,21 +379,36 @@ def stripe_webhook():
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
     except ValueError as e:
+        print(f"Error while parsing Stripe event: {e}")
         return 'Invalid payload', 400
     except stripe.error.SignatureVerificationError as e:
+        print(f"Error while verifying Stripe signature: {e}")
         return 'Invalid signature', 400
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         customer_email = session.get('customer_email')
-        # Update your database to mark the customer as having paid
-        # You can use the email to identify the customer
+        # Handle successful payment here
 
     return '', 200
 
-@app.route('/contact')
-def contact():
-    return "For all enquiries, contact us at klay at simplifiedanalytics dot com dot au"
+def get_all_activities(access_token):
+    activities = []
+    page = 1
+    while True:
+        response = requests.get(
+            f'https://www.strava.com/api/v3/athlete/activities',
+            headers={'Authorization': f'Bearer {access_token}'},
+            params={'per_page': 200, 'page': page}
+        )
+        if response.status_code != 200:
+            break
+        page_activities = response.json()
+        if not page_activities:
+            break
+        activities.extend(page_activities)
+        page += 1
+    return activities
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
