@@ -79,7 +79,7 @@ def login_callback():
 
     return render_template('index.html', is_paid_user=is_paid_user(athlete_id), days_run=True, total_kms=True, avg_kms=True)
 
-def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
+def save_tokens_to_db(athlete_id, owner_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -89,9 +89,8 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
             ON DUPLICATE KEY UPDATE
                 access_token = VALUES(access_token),
                 refresh_token = VALUES(refresh_token),
-                expires_at = VALUES(expires_at),
-                owner_id = VALUES(owner_id)
-        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
+                expires_at = VALUES(expires_at)
+        """, (athlete_id, owner_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
