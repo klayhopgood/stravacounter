@@ -161,19 +161,16 @@ def handle_activity_create(activity_id, owner_id):
         params={'per_page': 200}
     )
 
-    print(f"Response Status Code: {response.status_code}")
-
     if response.status_code != 200:
         print(f"Failed to fetch activities: {response.text}")
         return
 
     activities = response.json()
-    preferences = get_user_preferences(owner_id)
-
     days_run, total_days = calculate_days_run_this_year(activities)
     total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
+    # Get the activity to update
     activity_response = requests.get(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers
@@ -185,36 +182,32 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
-    description = ""
-    if preferences.get('days_run', True):
-        description += f"🌍 Days run this year: {days_run}/{total_days}\n"
-    if preferences.get('total_kms', True):
-        description += f"🏃‍♂️ Total kms run this year: {total_kms_run}\n"
-    if preferences.get('avg_kms', True):
-        description += f"🏃‍♂️ Average kms per week (last 4 weeks): {avg_kms_per_week}\n"
-    if preferences.get('total_elevation', True):
-        description += f"⛰️ Total elevation gain this year: {total_elevation}\n"
-    if preferences.get('avg_elevation', True):
-        description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week}\n"
-    if preferences.get('beers_burnt', True):
-        calories = activity['calories']
-        beers_burnt = round(calories / 140, 1)
-        description += f"🍺 Beers burnt: {beers_burnt}\n"
-    if preferences.get('pizza_slices_burnt', True):
-        calories = activity['calories']
-        pizza_slices_burnt = round(calories / 285, 1)
-        description += f"🍕 Pizza slices burnt: {pizza_slices_burnt}\n"
+    # Calculate calories burnt for this activity
+    total_calories_burnt = activity.get('calories', 0)
+    beers_burnt = total_calories_burnt / 140
+    pizza_slices_burnt = total_calories_burnt / 285
+
+    # Update the description
+    new_description = f"🌍 Days run this year: {days_run}/{total_days}\n" \
+                      f"🏃 Total kms run this year: {total_kms_run:.1f} km\n" \
+                      f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n" \
+                      f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n" \
+                      f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n" \
+                      f"🍺 Beers burnt: {beers_burnt:.1f}\n" \
+                      f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
+                      f"Try for free at www.blah.com"
 
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': description.strip()}  # Remove leading/trailing whitespace
+        json={'description': new_description}  # Use JSON data
     )
 
     if update_response.status_code == 200:
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
@@ -224,10 +217,9 @@ def calculate_days_run_this_year(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
+            run_date = parser.parse(activity['start_date_local']).date()
             if run_date >= start_of_year.date():
                 run_dates.add(run_date)
-                print(f"Counted Run Date: {run_date}")
 
     days_run = len(run_dates)
     total_days = (today - start_of_year).days + 1
@@ -235,24 +227,43 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.today().date()
-    start_of_period = today - datetime.timedelta(weeks=4)
+    today = datetime.datetime.today()
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
 
-    total_kms = sum(activity['distance'] / 1000 for activity in activities if activity['type'] == 'Run' and start_of_period <= datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date() <= today)
+    total_kms_run = 0.0
+    kms_last_4_weeks = 0.0
 
-    avg_kms_per_week = total_kms / 4
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_4_weeks_ago.date():
+                kms_last_4_weeks += activity['distance'] / 1000
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
+                total_kms_run += activity['distance'] / 1000
 
-    return round(total_kms, 1), round(avg_kms_per_week, 1)
+    avg_kms_per_week = kms_last_4_weeks / 4
+
+    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
 
 def calculate_elevation_stats(activities):
-    today = datetime.datetime.today().date()
-    start_of_period = today - datetime.timedelta(weeks=4)
+    today = datetime.datetime.today()
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
 
-    total_elevation = sum(activity['total_elevation_gain'] for activity in activities if activity['type'] == 'Run' and start_of_period <= datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date() <= today)
+    total_elevation = 0.0
+    elevation_last_4_weeks = 0.0
 
-    avg_elevation_per_week = total_elevation / 4
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_4_weeks_ago.date():
+                elevation_last_4_weeks += activity['total_elevation_gain']
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
+                total_elevation += activity['total_elevation_gain']
+
+    avg_elevation_per_week = elevation_last_4_weeks / 4
 
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
+
 
 def get_user_preferences(owner_id):
     try:
@@ -353,6 +364,7 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
 
 
 def is_paid_user(athlete_id):
