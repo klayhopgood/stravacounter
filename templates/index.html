@@ -43,16 +43,5 @@
         <button type="submit">Submit Changes</button>
     </form>
     <div class="updated-message" style="display: {{ 'block' if updated else 'none' }};">Preferences updated</div>
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const updated = urlParams.get('updated');
-        if (updated) {
-            const message = document.querySelector('.updated-message');
-            message.style.display = 'block';
-            setTimeout(() => {
-                message.style.display = 'none';
-            }, 5000);
-        }
-    </script>
 </body>
 </html>

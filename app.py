@@ -64,11 +64,12 @@ def login_callback():
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
             preferences = get_user_preferences(athlete_id)
-            return render_template('index.html', is_paid_user=is_paid_user(athlete_id), preferences=preferences)
+            return render_template('index.html', preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
+
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -253,27 +254,64 @@ def calculate_elevation_stats(activities):
 
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
-def get_user_preferences(athlete_id):
+def get_user_preferences(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM user_preferences WHERE athlete_id = %s", (athlete_id,))
+        cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
         cursor.close()
         if result:
-            return result
+            return {
+                'days_run': result.get('days_run', True),
+                'total_kms': result.get('total_kms', True),
+                'avg_kms': result.get('avg_kms', True),
+                'total_elevation': result.get('total_elevation', False),
+                'avg_elevation': result.get('avg_elevation', False),
+                'avg_pace': result.get('avg_pace', False),
+                'avg_pace_per_week': result.get('avg_pace_per_week', False),
+                'beers_burnt': result.get('beers_burnt', False),
+                'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
+                'remove_promo': result.get('remove_promo', False)
+            }
         else:
-            return {'days_run': True, 'total_kms': True, 'avg_kms': True, 'total_elevation': True, 'avg_elevation': True, 'beers_burnt': True, 'pizza_slices_burnt': True, 'remove_ad': False}
+            return {
+                'days_run': True,
+                'total_kms': True,
+                'avg_kms': True,
+                'total_elevation': False,
+                'avg_elevation': False,
+                'avg_pace': False,
+                'avg_pace_per_week': False,
+                'beers_burnt': False,
+                'pizza_slices_burnt': False,
+                'remove_promo': False
+            }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
-        return None
+        return {
+            'days_run': True,
+            'total_kms': True,
+            'avg_kms': True,
+            'total_elevation': False,
+            'avg_elevation': False,
+            'avg_pace': False,
+            'avg_pace_per_week': False,
+            'beers_burnt': False,
+            'pizza_slices_burnt': False,
+            'remove_promo': False
+        }
     finally:
         if connection:
             connection.close()
 
+
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
+    if not owner_id:
+        return 'User not authenticated', 403
+
     preferences = {
         'days_run': 'days_run' in request.form,
         'total_kms': 'total_kms' in request.form,
@@ -314,7 +352,8 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return render_template('index.html', is_paid_user=is_paid_user(owner_id), preferences=preferences, updated=True)
+    return render_template('index.html', preferences=preferences, updated=True)
+
 
 def is_paid_user(athlete_id):
     try:
