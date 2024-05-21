@@ -1,8 +1,8 @@
-from flask import Flask, request, redirect, jsonify, render_template, session, url_for
+from flask import Flask, request, redirect, jsonify, render_template, session
 import requests
 import mysql.connector
 import datetime
-from dateutil import parser
+from mysql.connector import errorcode
 import secrets
 
 app = Flask(__name__)
@@ -10,7 +10,7 @@ app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
 
 # Strava credentials
 CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your actual client secret
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
@@ -33,7 +33,7 @@ def home():
 
 @app.route('/login')
 def login():
-    redirect_uri = url_for('login_callback', _external=True)
+    redirect_uri = request.base_url + '/callback'
     authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
@@ -166,11 +166,12 @@ def handle_activity_create(activity_id, owner_id):
         return
 
     activities = response.json()
+    preferences = get_user_preferences(owner_id)
+
     days_run, total_days = calculate_days_run_this_year(activities)
     total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
-    # Get the activity to update
     activity_response = requests.get(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers
@@ -182,25 +183,30 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
-    # Calculate calories burnt for this activity
-    total_calories_burnt = activity.get('calories', 0)
-    beers_burnt = total_calories_burnt / 140
-    pizza_slices_burnt = total_calories_burnt / 285
-
-    # Update the description
-    new_description = f"🌍 Days run this year: {days_run}/{total_days}\n" \
-                      f"🏃 Total kms run this year: {total_kms_run:.1f} km\n" \
-                      f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n" \
-                      f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n" \
-                      f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n" \
-                      f"🍺 Beers burnt: {beers_burnt:.1f}\n" \
-                      f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n" \
-                      f"Try for free at www.blah.com"
+    description = ""
+    if preferences.get('days_run', True):
+        description += f"🌍 Days run this year: {days_run}/{total_days}\n"
+    if preferences.get('total_kms', True):
+        description += f"🏃‍♂️ Total kms run this year: {total_kms_run}\n"
+    if preferences.get('avg_kms', True):
+        description += f"🏃‍♂️ Average kms per week (last 4 weeks): {avg_kms_per_week}\n"
+    if preferences.get('total_elevation', True):
+        description += f"⛰️ Total elevation gain this year: {total_elevation}\n"
+    if preferences.get('avg_elevation', True):
+        description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week}\n"
+    if preferences.get('beers_burnt', True):
+        calories = activity['calories']
+        beers_burnt = round(calories / 140, 1)
+        description += f"🍺 Beers burnt: {beers_burnt}\n"
+    if preferences.get('pizza_slices_burnt', True):
+        calories = activity['calories']
+        pizza_slices_burnt = round(calories / 285, 1)
+        description += f"🍕 Pizza slices burnt: {pizza_slices_burnt}\n"
 
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': new_description}  # Use JSON data
+        json={'description': description.strip()}  # Remove leading/trailing whitespace
     )
 
     if update_response.status_code == 200:
@@ -216,7 +222,7 @@ def calculate_days_run_this_year(activities):
 
     for activity in activities:
         if activity['type'] == 'Run':
-            run_date = parser.parse(activity['start_date_local']).date()
+            run_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date()
             if run_date >= start_of_year.date():
                 run_dates.add(run_date)
                 print(f"Counted Run Date: {run_date}")
@@ -227,132 +233,76 @@ def calculate_days_run_this_year(activities):
     return days_run, total_days
 
 def calculate_kms_stats(activities):
-    today = datetime.datetime.today()
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
+    today = datetime.datetime.today().date()
+    start_of_period = today - datetime.timedelta(weeks=4)
 
-    total_kms_run = 0.0
-    kms_last_4_weeks = 0.0
+    total_kms = sum(activity['distance'] / 1000 for activity in activities if activity['type'] == 'Run' and start_of_period <= datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date() <= today)
 
-    for activity in activities:
-        if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_4_weeks_ago.date():
-                kms_last_4_weeks += activity['distance'] / 1000
-            if activity_date >= datetime.datetime(today.year, 1, 1).date():
-                total_kms_run += activity['distance'] / 1000
+    avg_kms_per_week = total_kms / 4
 
-    avg_kms_per_week = kms_last_4_weeks / 4
-
-    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
+    return round(total_kms, 1), round(avg_kms_per_week, 1)
 
 def calculate_elevation_stats(activities):
-    today = datetime.datetime.today()
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
+    today = datetime.datetime.today().date()
+    start_of_period = today - datetime.timedelta(weeks=4)
 
-    total_elevation = 0.0
-    elevation_last_4_weeks = 0.0
+    total_elevation = sum(activity['total_elevation_gain'] for activity in activities if activity['type'] == 'Run' and start_of_period <= datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z').date() <= today)
 
-    for activity in activities:
-        if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_4_weeks_ago.date():
-                elevation_last_4_weeks += activity['total_elevation_gain']
-            if activity_date >= datetime.datetime(today.year, 1, 1).date():
-                total_elevation += activity['total_elevation_gain']
-
-    avg_elevation_per_week = elevation_last_4_weeks / 4
+    avg_elevation_per_week = total_elevation / 4
 
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
-def is_paid_user(owner_id):
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE owner_id = %s", (owner_id,))
-        result = cursor.fetchone()
-        return result[0] == 1 if result else False
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-        return False
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-def get_user_preferences(owner_id):
+def get_user_preferences(athlete_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
+        cursor.execute("SELECT * FROM user_preferences WHERE athlete_id = %s", (athlete_id,))
         result = cursor.fetchone()
+        cursor.close()
         if result:
-            return {
-                'days_run': result.get('days_run', True),
-                'total_kms': result.get('total_kms', True),
-                'avg_kms': result.get('avg_kms', True),
-                'total_elevation': result.get('total_elevation', False),
-                'avg_elevation': result.get('avg_elevation', False),
-                'avg_pace': result.get('avg_pace', False),
-                'avg_pace_per_week': result.get('avg_pace_per_week', False),
-                'beers_burnt': result.get('beers_burnt', False),
-                'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False)
-            }
+            return result
         else:
-            return {
-                'days_run': True,
-                'total_kms': True,
-                'avg_kms': True,
-                'total_elevation': False,
-                'avg_elevation': False,
-                'avg_pace': False,
-                'avg_pace_per_week': False,
-                'beers_burnt': False,
-                'pizza_slices_burnt': False,
-                'remove_promo': False
-            }
+            return {'days_run': True, 'total_kms': True, 'avg_kms': True, 'total_elevation': True, 'avg_elevation': True, 'beers_burnt': True, 'pizza_slices_burnt': True, 'remove_ad': False}
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
-        return {}
+        return None
     finally:
         if connection:
             connection.close()
 
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
-    owner_id = session.get('athlete_id')
+    athlete_id = session.get('athlete_id')
+    if not athlete_id:
+        return redirect('/')
+
     preferences = {
         'days_run': 'days_run' in request.form,
         'total_kms': 'total_kms' in request.form,
         'avg_kms': 'avg_kms' in request.form,
         'total_elevation': 'total_elevation' in request.form,
         'avg_elevation': 'avg_elevation' in request.form,
-        'avg_pace': 'avg_pace' in request.form,
-        'avg_pace_per_week': 'avg_pace_per_week' in request.form,
         'beers_burnt': 'beers_burnt' in request.form,
         'pizza_slices_burnt': 'pizza_slices_burnt' in request.form,
-        'remove_promo': 'remove_promo' in request.form
+        'remove_ad': 'remove_ad' in request.form
     }
 
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO user_preferences (athlete_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, beers_burnt, pizza_slices_burnt, remove_ad)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 days_run = VALUES(days_run),
                 total_kms = VALUES(total_kms),
                 avg_kms = VALUES(avg_kms),
                 total_elevation = VALUES(total_elevation),
                 avg_elevation = VALUES(avg_elevation),
-                avg_pace = VALUES(avg_pace),
-                avg_pace_per_week = VALUES(avg_pace_per_week),
                 beers_burnt = VALUES(beers_burnt),
                 pizza_slices_burnt = VALUES(pizza_slices_burnt),
-                remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
+                remove_ad = VALUES(remove_ad)
+        """, (athlete_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_ad']))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -362,7 +312,22 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return render_template('index.html', is_paid_user=is_paid_user(owner_id), preferences=preferences, updated=True)
+    return redirect('/login/callback?updated=true')
+
+def is_paid_user(athlete_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        return result['is_paid_user'] == 1
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return False
+    finally:
+        if connection:
+            connection.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
