@@ -3,76 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Data App</title>
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <title>Strava Uploader</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome to Strava Data App</h1>
-        <p>You are successfully logged in.</p>
-        <form action="/update_preferences" method="post">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="days_run" id="days_run" checked>
-                <label class="form-check-label" for="days_run">Days Run This Year</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="total_kms" id="total_kms" checked>
-                <label class="form-check-label" for="total_kms">Total Kilometers Run This Year</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="avg_kms" id="avg_kms" checked>
-                <label class="form-check-label" for="avg_kms">Average Kilometers per Week (Last 4 Weeks)</label>
-            </div>
-            {% if is_paid_user %}
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="total_elevation" id="total_elevation">
-                <label class="form-check-label" for="total_elevation">Total Elevation Gain This Year</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="avg_elevation" id="avg_elevation">
-                <label class="form-check-label" for="avg_elevation">Average Elevation Gain per Week (Last 4 Weeks)</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="avg_pace" id="avg_pace">
-                <label class="form-check-label" for="avg_pace">Average Pace This Year</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="avg_pace_per_week" id="avg_pace_per_week">
-                <label class="form-check-label" for="avg_pace_per_week">Average Pace per Week (Last 4 Weeks)</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="beers_burnt" id="beers_burnt">
-                <label class="form-check-label" for="beers_burnt">Number of Beers Burnt</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="pizza_slices_burnt" id="pizza_slices_burnt">
-                <label class="form-check-label" for="pizza_slices_burnt">Number of Pizza Slices Burnt</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="remove_promo" id="remove_promo">
-                <label class="form-check-label" for="remove_promo">Remove "Try for free at www.blah.com"</label>
-            </div>
-            {% endif %}
-            <button type="submit" class="btn btn-primary">Update Preferences</button>
-        </form>
-        {% if updated %}
-        <p>Update successful</p>
-        {% endif %}
-        <a href="/deauthorize" class="btn btn-danger">Disconnect from Strava</a>
-        <br><br>
-        <h3>Premium Features</h3>
-        {% if not is_paid_user %}
-        <form action="/create_checkout_session" method="POST">
-            <button type="submit" class="btn btn-primary">Become a Paid User for $5/month</button>
-        </form>
+    <h1>Welcome to Strava Uploader</h1>
+    <form action="/update_preferences" method="post">
+        <div>
+            <input type="checkbox" id="days_run" name="days_run" checked>
+            <label for="days_run">Days run this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="total_kms" name="total_kms" checked>
+            <label for="total_kms">Total kms run this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_kms" name="avg_kms" checked>
+            <label for="avg_kms">Average kms per week (last 4 weeks)</label>
+        </div>
+
+        {% if is_paid_user %}
+        <h3>Paid Features</h3>
+        <div>
+            <input type="checkbox" id="total_elevation" name="total_elevation">
+            <label for="total_elevation">Total elevation gain this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_elevation" name="avg_elevation">
+            <label for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_pace" name="avg_pace">
+            <label for="avg_pace">Average pace this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week">
+            <label for="avg_pace_per_week">Average pace per week (last 4 weeks)</label>
+        </div>
+        <div>
+            <input type="checkbox" id="beers_burnt" name="beers_burnt">
+            <label for="beers_burnt">Number of beers burnt</label>
+        </div>
+        <div>
+            <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt">
+            <label for="pizza_slices_burnt">Number of pizza slices burnt</label>
+        </div>
+        <div>
+            <input type="checkbox" id="remove_promo" name="remove_promo">
+            <label for="remove_promo">Remove promotional message</label>
+        </div>
         {% else %}
-        <p>You are a premium user with access to all features.</p>
-        <form action="/cancel_subscription" method="POST">
-            <button type="submit" class="btn btn-warning">Cancel Subscription</button>
-        </form>
+        <h3>Paid Features</h3>
+        <div>
+            <input type="checkbox" id="total_elevation" name="total_elevation" disabled>
+            <label for="total_elevation">Total elevation gain this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_elevation" name="avg_elevation" disabled>
+            <label for="avg_elevation">Average elevation gain per week (last 4 weeks)</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_pace" name="avg_pace" disabled>
+            <label for="avg_pace">Average pace this year</label>
+        </div>
+        <div>
+            <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week" disabled>
+            <label for="avg_pace_per_week">Average pace per week (last 4 weeks)</label>
+        </div>
+        <div>
+            <input type="checkbox" id="beers_burnt" name="beers_burnt" disabled>
+            <label for="beers_burnt">Number of beers burnt</label>
+        </div>
+        <div>
+            <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt" disabled>
+            <label for="pizza_slices_burnt">Number of pizza slices burnt</label>
+        </div>
+        <div>
+            <input type="checkbox" id="remove_promo" name="remove_promo" disabled>
+            <label for="remove_promo">Remove promotional message</label>
+        </div>
+        <div>
+            <form action="/create_checkout_session" method="POST">
+                <button type="submit">Upgrade to Premium</button>
+            </form>
+        </div>
         {% endif %}
-        <br><br>
-        <a href="/contact" class="btn btn-info">Contact Us</a>
-    </div>
+
+        <div>
+            <button type="submit">Update Preferences</button>
+        </div>
+    </form>
+
+    {% if updated %}
+    <p>Preferences updated successfully.</p>
+    {% endif %}
+
+    <footer>
+        <p><a href="/contact">Contact Us</a></p>
+    </footer>
 </body>
 </html>
