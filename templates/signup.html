@@ -12,6 +12,7 @@
             padding: 20px;
             text-align: center;
         }
+
         .container {
             max-width: 500px;
             margin: auto;
@@ -20,16 +21,15 @@
             border-radius: 10px;
             box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
         }
+
         h1 {
             margin-top: 0;
         }
-        .btn-primary {
-            background-color: #1E88E5;
-            border-color: #1E88E5;
-        }
-        .btn-primary:hover {
-            background-color: #0d47a1;
-            border-color: #0d47a1;
+
+        .btn-strava {
+            border: none;
+            padding: 0;
+            background: none;
         }
     </style>
 </head>
@@ -37,7 +37,10 @@
     <div class="container">
         <h1>Strava Data App</h1>
         <p>To get started, sign up with Strava:</p>
-        <a href="/login" class="btn btn-primary">SIGN UP WITH STRAVA</a>
+        <a href="/login" class="btn-strava">
+            <img src="{{ url_for('static', filename='btn_strava_connectwith_orange.png') }}" alt="Connect with Strava">
+        </a>
+        <p>Simply connect your Strava and select which data points you want to upload automatically. Disconnect at any time.</p>
     </div>
 </body>
 </html>

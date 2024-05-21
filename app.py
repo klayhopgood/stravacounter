@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify, render_template, session
+from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import requests
 import mysql.connector
 import datetime
@@ -29,11 +29,11 @@ def get_db_connection():
 
 @app.route('/')
 def home():
-    return render_template('login.html')
+    return render_template('signup.html')
 
 @app.route('/login')
 def login():
-    redirect_uri = request.base_url + '/callback'
+    redirect_uri = url_for('login_callback', _external=True)
     authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
@@ -63,7 +63,7 @@ def login_callback():
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
             preferences = get_user_preferences(athlete_id)
-            return render_template('index.html', is_paid_user=is_paid_user(athlete_id), preferences=preferences)
+            return render_template('index.html', preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
@@ -312,7 +312,7 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return redirect('/login/callback?updated=true')
+    return redirect(url_for('login_callback', updated=True))
 
 def is_paid_user(athlete_id):
     try:
