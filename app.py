@@ -5,7 +5,7 @@ import datetime
 from mysql.connector import errorcode
 import secrets
 from dateutil import parser
-from flask_session import Session  # Ensure you have flask-session installed
+from flask_session import Session
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
@@ -79,8 +79,6 @@ def login_callback():
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
-
-
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -231,7 +229,6 @@ def handle_activity_create(activity_id, owner_id):
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
 
-
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
     start_of_year = datetime.datetime(today.year, 1, 1)
@@ -287,7 +284,6 @@ def calculate_elevation_stats(activities):
 
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
-
 def get_user_preferences(owner_id):
     try:
         connection = get_db_connection()
@@ -339,7 +335,6 @@ def get_user_preferences(owner_id):
         if connection:
             connection.close()
 
-
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
@@ -348,16 +343,16 @@ def update_preferences():
         return 'User not authenticated', 403
 
     preferences = {
-        'days_run': 'days_run' in request.form,
-        'total_kms': 'total_kms' in request.form,
-        'avg_kms': 'avg_kms' in request.form,
-        'total_elevation': 'total_elevation' in request.form,
-        'avg_elevation': 'avg_elevation' in request.form,
-        'avg_pace': 'avg_pace' in request.form,
-        'avg_pace_per_week': 'avg_pace_per_week' in request.form,
-        'beers_burnt': 'beers_burnt' in request.form,
-        'pizza_slices_burnt': 'pizza_slices_burnt' in request.form,
-        'remove_promo': 'remove_promo' in request.form
+        'days_run': 1 if 'days_run' in request.form else 0,
+        'total_kms': 1 if 'total_kms' in request.form else 0,
+        'avg_kms': 1 if 'avg_kms' in request.form else 0,
+        'total_elevation': 1 if 'total_elevation' in request.form else 0,
+        'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
+        'avg_pace': 1 if 'avg_pace' in request.form else 0,
+        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
+        'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
+        'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
+        'remove_promo': 1 if 'remove_promo' in request.form else 0
     }
 
     try:
@@ -388,23 +383,6 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
-
-
-
-def is_paid_user(athlete_id):
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
-        result = cursor.fetchone()
-        cursor.close()
-        return result['is_paid_user'] == 1
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-        return False
-    finally:
-        if connection:
-            connection.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
