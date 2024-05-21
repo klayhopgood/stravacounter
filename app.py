@@ -165,6 +165,12 @@ def handle_activity_create(activity_id, owner_id):
 
     activities = response.json()
     days_run, total_days = calculate_days_run_this_year(activities)
+    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+    total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
+    avg_pace, avg_pace_per_week = calculate_pace_stats(activities)
+    total_calories_burnt = calculate_calories_burnt(activities)
+    beers_burnt = total_calories_burnt // 43
+    pizza_slices_burnt = total_calories_burnt // 285
 
     # Get the activity to update
     activity_response = requests.get(
@@ -179,7 +185,18 @@ def handle_activity_create(activity_id, owner_id):
     activity = activity_response.json()
 
     # Update the description
-    new_description = f"{activity.get('description', '')}\nDays run this year: {days_run}/{total_days}"
+    new_description = f"{activity.get('description', '')}\n" \
+                      f"Days run this year: {days_run}/{total_days}\n" \
+                      f"Total kms run this year: {total_kms_run:.2f} km\n" \
+                      f"Average kms per week: {avg_kms_per_week:.2f} km\n" \
+                      f"Total elevation gain this year: {total_elevation:.2f} m\n" \
+                      f"Average elevation per week: {avg_elevation_per_week:.2f} m\n" \
+                      f"Average pace this year: {avg_pace:.2f} min/km\n" \
+                      f"Average pace per week: {avg_pace_per_week:.2f} min/km\n" \
+                      f"Beers burnt: {beers_burnt}\n" \
+                      f"Pizza slices burnt: {pizza_slices_burnt}\n" \
+                      f"Try for free at www.blah.com"
+
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
@@ -209,18 +226,88 @@ def calculate_days_run_this_year(activities):
 
     return days_run, total_days
 
+def calculate_kms_stats(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    total_kms_run = 0.0
+    kms_per_week = {}
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            if activity_date >= start_of_year:
+                week = activity_date.isocalendar()[1]
+                kms_per_week[week] = kms_per_week.get(week, 0) + activity['distance'] / 1000
+                total_kms_run += activity['distance'] / 1000
+
+    avg_kms_per_week = total_kms_run / len(kms_per_week) if kms_per_week else 0
+
+    return total_kms_run, avg_kms_per_week
+
+def calculate_elevation_stats(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    total_elevation = 0.0
+    elevation_per_week = {}
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            if activity_date >= start_of_year:
+                week = activity_date.isocalendar()[1]
+                elevation_per_week[week] = elevation_per_week.get(week, 0) + activity['total_elevation_gain']
+                total_elevation += activity['total_elevation_gain']
+
+    avg_elevation_per_week = total_elevation / len(elevation_per_week) if elevation_per_week else 0
+
+    return total_elevation, avg_elevation_per_week
+
+def calculate_pace_stats(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+
+    total_time = 0.0
+    total_distance = 0.0
+    pace_per_week = {}
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = datetime.datetime.strptime(activity['start_date_local'], '%Y-%m-%dT%H:%M:%S%z')
+            if activity_date >= start_of_year:
+                week = activity_date.isocalendar()[1]
+                total_time += activity['moving_time']
+                total_distance += activity['distance'] / 1000
+                pace_per_week[week] = pace_per_week.get(week, 0) + (activity['moving_time'] / (activity['distance'] / 1000))
+
+    avg_pace = (total_time / 60) / total_distance if total_distance > 0 else 0
+    avg_pace_per_week = (sum(pace_per_week.values()) / len(pace_per_week)) / 60 if pace_per_week else 0
+
+    return avg_pace, avg_pace_per_week
+
+def calculate_calories_burnt(activities):
+    total_calories = 0
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            total_calories += activity.get('calories', 0)
+
+    return total_calories
+
 def is_paid_user(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
-        cursor.close()
-        return result and result[0]
+        return result[0] == 1 if result else False
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
         return False
     finally:
+        if cursor:
+            cursor.close()
         if connection:
             connection.close()
 
@@ -230,7 +317,6 @@ def get_user_preferences(owner_id):
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
-        cursor.close()
         if result:
             return {
                 'days_run': result.get('days_run', True),
