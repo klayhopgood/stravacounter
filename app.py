@@ -1,4 +1,5 @@
 from flask import Flask, request, redirect, jsonify, render_template, session, url_for
+import stripe
 import requests
 import mysql.connector
 import datetime
@@ -6,21 +7,15 @@ from mysql.connector import errorcode
 import secrets
 from dateutil import parser
 from flask_session import Session
-import stripe
-
-# Stripe configuration
-stripe.api_key = 'sk_test_51PJDimAlw5arL9EanWVm9Jg9yF5ZiFgnLx3tzh5Snx2fbW2TduAATIB1Lzmf4gQiYscwGRKZxavu89UVqubbjbqh00dRAB8Kme'
-endpoint_secret = 'whsec_SpYHjmZTR6G7iowQFSHSkXngW4ewqRLr'
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
-# Strava credentials
-CLIENT_ID = '99652'
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
-VERIFY_TOKEN = 'STRAVA'
+# Stripe API configuration
+stripe.api_key = 'sk_test_51PJDimAlw5arL9EanWVm9Jg9yF5ZiFgnLx3tzh5Snx2fbW2TduAATIB1Lzmf4gQiYscwGRKZxavu89UVqubbjbqh00dRAB8Kme'
+endpoint_secret = 'whsec_SpYHjmZTR6G7iowQFSHSkXngW4ewqRLr'
 
 # Database configuration
 db_config = {
@@ -188,7 +183,6 @@ def handle_activity_create(activity_id, owner_id):
         return
 
     activity = activity_response.json()
-
     preferences = get_user_preferences(owner_id)
 
     total_calories_burnt = activity.get('calories', 0)
@@ -298,7 +292,7 @@ def get_user_preferences(owner_id):
                 'beers_burnt': result.get('beers_burnt', False),
                 'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
                 'remove_promo': result.get('remove_promo', False),
-                'is_paid_user': result.get('is_paid_user', 0)
+                'is_paid_user': result.get('is_paid_user', False)
             }
         else:
             return {
@@ -312,7 +306,7 @@ def get_user_preferences(owner_id):
                 'beers_burnt': False,
                 'pizza_slices_burnt': False,
                 'remove_promo': False,
-                'is_paid_user': 0
+                'is_paid_user': False
             }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -327,7 +321,7 @@ def get_user_preferences(owner_id):
             'beers_burnt': False,
             'pizza_slices_burnt': False,
             'remove_promo': False,
-            'is_paid_user': 0
+            'is_paid_user': False
         }
     finally:
         if connection:
@@ -336,21 +330,20 @@ def get_user_preferences(owner_id):
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
-    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
     if not owner_id:
         return 'User not authenticated', 403
 
     preferences = {
-        'days_run': 1 if 'days_run' in request.form else 0,
-        'total_kms': 1 if 'total_kms' in request.form else 0,
-        'avg_kms': 1 if 'avg_kms' in request.form else 0,
-        'total_elevation': 1 if 'total_elevation' in request.form else 0,
-        'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
-        'avg_pace': 1 if 'avg_pace' in request.form else 0,
-        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
-        'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
-        'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
-        'remove_promo': 1 if 'remove_promo' in request.form else 0
+        'days_run': 'days_run' in request.form,
+        'total_kms': 'total_kms' in request.form,
+        'avg_kms': 'avg_kms' in request.form,
+        'total_elevation': 'total_elevation' in request.form,
+        'avg_elevation': 'avg_elevation' in request.form,
+        'avg_pace': 'avg_pace' in request.form,
+        'avg_pace_per_week': 'avg_pace_per_week' in request.form,
+        'beers_burnt': 'beers_burnt' in request.form,
+        'pizza_slices_burnt': 'pizza_slices_burnt' in request.form,
+        'remove_promo': 'remove_promo' in request.form
     }
 
     try:
@@ -387,11 +380,10 @@ def create_checkout_session():
     try:
         session_stripe = stripe.checkout.Session.create(
             payment_method_types=['card'],
-            subscription_data={
-                'items': [{
-                    'price': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual price ID
-                }],
-            },
+            line_items=[{
+                'price': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual price ID
+                'quantity': 1,
+            }],
             mode='subscription',
             success_url=url_for('subscription_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=url_for('home', _external=True),
@@ -399,7 +391,6 @@ def create_checkout_session():
         return jsonify({'sessionId': session_stripe['id']})
     except Exception as e:
         return jsonify(error=str(e)), 403
-
 
 @app.route('/subscription-success')
 def subscription_success():
@@ -427,7 +418,7 @@ def subscription_success():
 
     return redirect(url_for('home'))
 
-@app.route('/stripe-webhook', methods=['POST'])
+@app.route('/webhook', methods=['POST'])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get('Stripe-Signature')
@@ -435,21 +426,24 @@ def stripe_webhook():
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
     except ValueError as e:
+        print(f"Error while parsing webhook: {e}")
         return 'Invalid payload', 400
     except stripe.error.SignatureVerificationError as e:
+        print(f"Error while verifying webhook signature: {e}")
         return 'Invalid signature', 400
 
-    if event['type'] == 'invoice.payment_succeeded':
-        customer_id = event['data']['object']['customer']
-        athlete_id = get_athlete_id_by_stripe_customer_id(customer_id)
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        customer_id = session.get('customer')
+        athlete_id = session.get('client_reference_id')
 
-        if athlete_id:
+        if customer_id and athlete_id:
             try:
                 connection = get_db_connection()
                 cursor = connection.cursor()
                 cursor.execute("""
-                    UPDATE strava_tokens SET is_paid_user = 1 WHERE athlete_id = %s
-                """, (athlete_id,))
+                    UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
+                """, (customer_id, athlete_id))
                 connection.commit()
             except mysql.connector.Error as err:
                 print(f"Error: {err.msg}")
@@ -459,22 +453,7 @@ def stripe_webhook():
                 if connection:
                     connection.close()
 
-    return '', 200
-
-def get_athlete_id_by_stripe_customer_id(customer_id):
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT athlete_id FROM strava_tokens WHERE stripe_customer_id = %s", (customer_id,))
-        result = cursor.fetchone()
-        cursor.close()
-        return result['athlete_id']
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-        return None
-    finally:
-        if connection:
-            connection.close()
+    return 'Success', 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
