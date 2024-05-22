@@ -64,7 +64,7 @@
             }, 5000);
         }
 
-        const stripe = Stripe('pk_test_your_public_key');  // Replace with your Stripe public key
+        const stripe = Stripe('pk_test_51PJDimAlw5arL9EaWWn7ZD2DmsWXQK05UK1GvspYeWLIAEZ7BvUASSno5NglMz99DmPzytnBWnzjUmvtvfhfxbXe00O7Z8juYY');  // Replace with your Stripe public key
 
         document.getElementById('checkout-button').addEventListener('click', async () => {
             const response = await fetch('/create-checkout-session', {
