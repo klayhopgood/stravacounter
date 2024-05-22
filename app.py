@@ -226,7 +226,6 @@ def handle_activity_create(activity_id, owner_id):
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
     start_of_year = datetime.datetime(today.year, 1, 1)
-
     run_dates = set()
 
     for activity in activities:
@@ -243,7 +242,6 @@ def calculate_days_run_this_year(activities):
 def calculate_kms_stats(activities):
     today = datetime.datetime.today()
     start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-
     total_kms_run = 0.0
     kms_last_4_weeks = 0.0
 
@@ -262,7 +260,6 @@ def calculate_kms_stats(activities):
 def calculate_elevation_stats(activities):
     today = datetime.datetime.today()
     start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-
     total_elevation = 0.0
     elevation_last_4_weeks = 0.0
 
