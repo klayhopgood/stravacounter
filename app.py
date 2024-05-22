@@ -6,25 +6,30 @@ from mysql.connector import errorcode
 import secrets
 from dateutil import parser
 from flask_session import Session
+import stripe
+
+# Stripe configuration
+stripe.api_key = 'sk_test_51PJDimAlw5arL9EanWVm9Jg9yF5ZiFgnLx3tzh5Snx2fbW2TduAATIB1Lzmf4gQiYscwGRKZxavu89UVqubbjbqh00dRAB8Kme'
+endpoint_secret = 'whsec_SpYHjmZTR6G7iowQFSHSkXngW4ewqRLr'
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
-app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+app.secret_key = secrets.token_hex(16)
+app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
 # Strava credentials
-CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+CLIENT_ID = '99652'
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
     'ssl_disabled': False
 }
 
@@ -59,12 +64,6 @@ def login_callback():
             refresh_token = tokens.get('refresh_token')
             expires_at = tokens.get('expires_at')
             athlete_id = str(tokens.get('athlete').get('id'))
-
-            # Debugging print statements
-            print(f"Access Token: {access_token}")
-            print(f"Refresh Token: {refresh_token}")
-            print(f"Expires At: {expires_at}")
-            print(f"Athlete ID: {athlete_id}")
 
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
@@ -179,7 +178,6 @@ def handle_activity_create(activity_id, owner_id):
     total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
-    # Get the activity to update
     activity_response = requests.get(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers
@@ -191,15 +189,12 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
-    # Fetch user preferences
     preferences = get_user_preferences(owner_id)
 
-    # Calculate calories burnt for this activity
     total_calories_burnt = activity.get('calories', 0)
     beers_burnt = total_calories_burnt / 140
     pizza_slices_burnt = total_calories_burnt / 285
 
-    # Build the new description based on preferences
     new_description = ""
     if preferences.get('days_run', True):
         new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
@@ -221,7 +216,7 @@ def handle_activity_create(activity_id, owner_id):
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': new_description}  # Use JSON data
+        json={'description': new_description}
     )
 
     if update_response.status_code == 200:
@@ -302,7 +297,8 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': result.get('avg_pace_per_week', False),
                 'beers_burnt': result.get('beers_burnt', False),
                 'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False)
+                'remove_promo': result.get('remove_promo', False),
+                'is_paid_user': result.get('is_paid_user', 0)
             }
         else:
             return {
@@ -315,7 +311,8 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': False,
                 'beers_burnt': False,
                 'pizza_slices_burnt': False,
-                'remove_promo': False
+                'remove_promo': False,
+                'is_paid_user': 0
             }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -329,7 +326,8 @@ def get_user_preferences(owner_id):
             'avg_pace_per_week': False,
             'beers_burnt': False,
             'pizza_slices_burnt': False,
-            'remove_promo': False
+            'remove_promo': False,
+            'is_paid_user': 0
         }
     finally:
         if connection:
@@ -383,6 +381,96 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
+@app.route('/create-checkout-session', methods=['POST'])
+def create_checkout_session():
+    try:
+        session_stripe = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            subscription_data={
+                'items': [{
+                    'plan': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual plan ID
+                }],
+            },
+            success_url=url_for('subscription_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url=url_for('home', _external=True),
+        )
+        return jsonify({'sessionId': session_stripe['id']})
+    except Exception as e:
+        return jsonify(error=str(e)), 403
+
+@app.route('/subscription-success')
+def subscription_success():
+    session_id = request.args.get('session_id')
+    checkout_session = stripe.checkout.Session.retrieve(session_id)
+    customer_id = checkout_session.customer
+
+    athlete_id = session.get('athlete_id')
+
+    if athlete_id:
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
+            """, (customer_id, athlete_id))
+            connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: {err.msg}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+
+    return redirect(url_for('home'))
+
+@app.route('/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except ValueError as e:
+        return 'Invalid payload', 400
+    except stripe.error.SignatureVerificationError as e:
+        return 'Invalid signature', 400
+
+    if event['type'] == 'invoice.payment_succeeded':
+        customer_id = event['data']['object']['customer']
+        athlete_id = get_athlete_id_by_stripe_customer_id(customer_id)
+        try:
+            connection = get_db_connection()
+            cursor = connection.cursor()
+            cursor.execute("""
+                UPDATE strava_tokens SET is_paid_user = 1 WHERE athlete_id = %s
+            """, (athlete_id,))
+            connection.commit()
+        except mysql.connector.Error as err:
+            print(f"Error: {err.msg}")
+        finally:
+            if cursor:
+                cursor.close()
+            if connection:
+                connection.close()
+
+    return '', 200
+
+def get_athlete_id_by_stripe_customer_id(customer_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT athlete_id FROM strava_tokens WHERE stripe_customer_id = %s", (customer_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        return result['athlete_id']
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return None
+    finally:
+        if connection:
+            connection.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

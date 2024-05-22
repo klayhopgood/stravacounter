@@ -4,44 +4,98 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Preferences</title>
+    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
     <h1>Strava Preferences</h1>
     <form action="/update_preferences" method="post">
         <label>
-            <input type="checkbox" name="days_run" {{ 'checked' if preferences['days_run'] else '' }}>
-            Days Run
+            <input type="checkbox" name="days_run" {{ 'checked' if preferences.days_run else '' }}>
+            Days Run (Free)
         </label><br>
         <label>
-            <input type="checkbox" name="total_kms" {{ 'checked' if preferences['total_kms'] else '' }}>
-            Total Kms
+            <input type="checkbox" name="total_kms" {{ 'checked' if preferences.total_kms else '' }}>
+            Total Kms (Free)
         </label><br>
         <label>
-            <input type="checkbox" name="avg_kms" {{ 'checked' if preferences['avg_kms'] else '' }}>
-            Average Kms
+            <input type="checkbox" name="avg_kms" {{ 'checked' if preferences.avg_kms else '' }}>
+            Average Kms (Free)
         </label><br>
         <label>
-            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences['total_elevation'] else '' }}>
-            Total Elevation
+            <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences.pizza_slices_burnt else '' }}>
+            Pizza Slices Burnt (Free)
         </label><br>
-        <label>
-            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences['avg_elevation'] else '' }}>
-            Average Elevation
-        </label><br>
-        <label>
-            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences['beers_burnt'] else '' }}>
-            Beers Burnt
-        </label><br>
-        <label>
-            <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences['pizza_slices_burnt'] else '' }}>
-            Pizza Slices Burnt
-        </label><br>
-        <label>
-            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences['remove_promo'] else '' }}>
-            Remove Promo
-        </label><br>
+
+        <!-- Paid options section -->
+        <div class="paid-options">
+            <h2>Paid Options</h2>
+            <p>Subscribe to unlock the following features:</p>
+            <label>
+                <input type="checkbox" name="total_elevation" {{ 'checked' if preferences.total_elevation else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
+                Total Elevation (Paid)
+            </label><br>
+            <label>
+                <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences.avg_elevation else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
+                Average Elevation (Paid)
+            </label><br>
+            <label>
+                <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences.beers_burnt else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
+                Beers Burnt (Paid)
+            </label><br>
+            <label>
+                <input type="checkbox" name="remove_promo" {{ 'checked' if preferences.remove_promo else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
+                Remove Promo (Paid)
+            </label><br>
+        </div>
+
         <button type="submit">Submit Changes</button>
     </form>
-    <div class="updated-message" style="display: {{ 'block' if updated else 'none' }};">Preferences updated</div>
+
+    <!-- Display message if preferences were updated -->
+    <div class="updated-message" style="display: none;">Preferences updated</div>
+
+    <!-- Stripe button for becoming a paid user -->
+    <div class="stripe-button" {{ 'style=display:none;' if preferences.is_paid_user else '' }}>
+        <button id="checkout-button">Become a Paid User</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const updated = urlParams.get('updated');
+        if (updated) {
+            const message = document.querySelector('.updated-message');
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+
+        // Stripe Checkout integration
+        var stripe = Stripe('your_publishable_key_here');
+        var checkoutButton = document.getElementById('checkout-button');
+
+        checkoutButton.addEventListener('click', function () {
+            fetch('/create-checkout-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (sessionId) {
+                return stripe.redirectToCheckout({ sessionId: sessionId });
+            })
+            .then(function (result) {
+                if (result.error) {
+                    alert(result.error.message);
+                }
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+            });
+        });
+    </script>
 </body>
 </html>
