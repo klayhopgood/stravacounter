@@ -382,46 +382,15 @@ def update_preferences():
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
+    athlete_id = session.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'User not authenticated'}), 403
+
     try:
-        session_stripe = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual price ID
-                'quantity': 1,
-            }],
-            mode='subscription',
-            success_url=url_for('subscription_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
-            cancel_url=url_for('home', _external=True),
-        )
-        return jsonify({'sessionId': session_stripe['id']})
+        checkout_url = f"https://buy.stripe.com/test_aEUeXf8AVcvVdA4000?client_reference_id={athlete_id}"
+        return jsonify({'url': checkout_url})
     except Exception as e:
         return jsonify(error=str(e)), 403
-
-@app.route('/subscription-success')
-def subscription_success():
-    session_id = request.args.get('session_id')
-    checkout_session = stripe.checkout.Session.retrieve(session_id)
-    customer_id = checkout_session.customer
-
-    athlete_id = session.get('athlete_id')
-
-    if athlete_id:
-        try:
-            connection = get_db_connection()
-            cursor = connection.cursor()
-            cursor.execute("""
-                UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
-            """, (customer_id, athlete_id))
-            connection.commit()
-        except mysql.connector.Error as err:
-            print(f"Error: {err.msg}")
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
-
-    return redirect(url_for('home'))
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
@@ -439,16 +408,16 @@ def stripe_webhook():
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        customer_id = session.get('customer')
-        athlete_id = session.get('client_reference_id')
+        customer_id = session['customer']
+        client_reference_id = session.get('client_reference_id')
 
-        if customer_id and athlete_id:
+        if client_reference_id:
             try:
                 connection = get_db_connection()
                 cursor = connection.cursor()
                 cursor.execute("""
                     UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
-                """, (customer_id, athlete_id))
+                """, (customer_id, client_reference_id))
                 connection.commit()
             except mysql.connector.Error as err:
                 print(f"Error: {err.msg}")
@@ -458,7 +427,7 @@ def stripe_webhook():
                 if connection:
                     connection.close()
 
-    return 'Success', 200
+    return '', 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
