@@ -1,11 +1,11 @@
-from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import stripe
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 import requests
 import mysql.connector
-import datetime
 from mysql.connector import errorcode
-import secrets
+import datetime
 from dateutil import parser
+import secrets
 from flask_session import Session
 
 app = Flask(__name__)
@@ -13,14 +13,9 @@ app.secret_key = secrets.token_hex(16)
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
-# Stripe API configuration
+# Stripe credentials
 stripe.api_key = 'sk_test_51PJDimAlw5arL9EanWVm9Jg9yF5ZiFgnLx3tzh5Snx2fbW2TduAATIB1Lzmf4gQiYscwGRKZxavu89UVqubbjbqh00dRAB8Kme'
 endpoint_secret = 'whsec_SpYHjmZTR6G7iowQFSHSkXngW4ewqRLr'
-
-# Strava credentials
-CLIENT_ID = '99652'
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
-VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
@@ -43,7 +38,7 @@ def home():
 @app.route('/login')
 def login():
     redirect_uri = url_for('login_callback', _external=True)
-    authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
+    authorize_url = f'https://www.strava.com/oauth/authorize?client_id=99652&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
 @app.route('/login/callback')
@@ -52,8 +47,8 @@ def login_callback():
     if code:
         token_url = 'https://www.strava.com/oauth/token'
         payload = {
-            'client_id': CLIENT_ID,
-            'client_secret': CLIENT_SECRET,
+            'client_id': '99652',
+            'client_secret': '2dc10e8d62b4925837aac970b6258fc3eae96c63',
             'code': code,
             'grant_type': 'authorization_code',
         }
@@ -71,30 +66,12 @@ def login_callback():
             session['athlete_id'] = athlete_id
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
-
             preferences = get_user_preferences(athlete_id)
             return render_template('index.html', preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
-
-@app.route('/deauthorize')
-def deauthorize():
-    access_token = session.get('access_token')
-    if access_token:
-        deauthorize_url = 'https://www.strava.com/oauth/deauthorize'
-        response = requests.post(deauthorize_url, data={'access_token': access_token})
-        if response.status_code == 200:
-            session.pop('access_token', None)
-            session.pop('refresh_token', None)
-            session.pop('expires_at', None)
-            session.pop('athlete_id', None)
-            return redirect('/')
-        else:
-            return 'Failed to deauthorize. Error: ' + response.text
-    else:
-        return redirect('/')
 
 def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
@@ -129,202 +106,6 @@ def get_tokens_from_db(owner_id):
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
         return None
-    finally:
-        if connection:
-            connection.close()
-
-@app.route('/webhook', methods=['GET', 'POST'])
-def webhook():
-    if request.method == 'GET':
-        verify_token = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
-        if verify_token == VERIFY_TOKEN:
-            return jsonify({'hub.challenge': challenge})
-        return 'Invalid verification token', 403
-    elif request.method == 'POST':
-        event = request.json
-        print(f"Received event: {event}")
-        if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
-            handle_activity_create(event['object_id'], event['owner_id'])
-        return 'Event received', 200
-
-def handle_activity_create(activity_id, owner_id):
-    if not owner_id:
-        print("No owner_id in the request")
-        return
-
-    tokens = get_tokens_from_db(owner_id)
-    if not tokens:
-        print(f"No tokens found for owner_id {owner_id}")
-        return
-
-    access_token = tokens['access_token']
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
-
-    response = requests.get(
-        'https://www.strava.com/api/v3/athlete/activities',
-        headers=headers,
-        params={'per_page': 200}
-    )
-
-    if response.status_code != 200:
-        print(f"Failed to fetch activities: {response.text}")
-        return
-
-    activities = response.json()
-    days_run, total_days = calculate_days_run_this_year(activities)
-    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
-    total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
-
-    activity_response = requests.get(
-        f'https://www.strava.com/api/v3/activities/{activity_id}',
-        headers=headers
-    )
-
-    if activity_response.status_code != 200:
-        print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
-        return
-
-    activity = activity_response.json()
-    preferences = get_user_preferences(owner_id)
-
-    total_calories_burnt = activity.get('calories', 0)
-    beers_burnt = total_calories_burnt / 140
-    pizza_slices_burnt = total_calories_burnt / 285
-
-    new_description = ""
-    if preferences.get('days_run', True):
-        new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
-    if preferences.get('total_kms', True):
-        new_description += f"🏃 Total kms run this year: {total_kms_run:.1f} km\n"
-    if preferences.get('avg_kms', True):
-        new_description += f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n"
-    if preferences.get('total_elevation', False):
-        new_description += f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n"
-    if preferences.get('avg_elevation', False):
-        new_description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n"
-    if preferences.get('beers_burnt', False):
-        new_description += f"🍺 Beers burnt: {beers_burnt:.1f}\n"
-    if preferences.get('pizza_slices_burnt', False):
-        new_description += f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n"
-    if not preferences.get('remove_promo', False):
-        new_description += "Try for free at www.blah.com"
-
-    update_response = requests.put(
-        f'https://www.strava.com/api/v3/activities/{activity_id}',
-        headers=headers,
-        json={'description': new_description}
-    )
-
-    if update_response.status_code == 200:
-        print(f"Activity {activity_id} updated successfully")
-    else:
-        print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
-
-def calculate_days_run_this_year(activities):
-    today = datetime.datetime.today()
-    start_of_year = datetime.datetime(today.year, 1, 1)
-    run_dates = set()
-
-    for activity in activities:
-        if activity['type'] == 'Run':
-            run_date = parser.parse(activity['start_date_local']).date()
-            if run_date >= start_of_year.date():
-                run_dates.add(run_date)
-
-    days_run = len(run_dates)
-    total_days = (today - start_of_year).days + 1
-
-    return days_run, total_days
-
-def calculate_kms_stats(activities):
-    today = datetime.datetime.today()
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-    total_kms_run = 0.0
-    kms_last_4_weeks = 0.0
-
-    for activity in activities:
-        if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_4_weeks_ago.date():
-                kms_last_4_weeks += activity['distance'] / 1000
-            if activity_date >= datetime.datetime(today.year, 1, 1).date():
-                total_kms_run += activity['distance'] / 1000
-
-    avg_kms_per_week = kms_last_4_weeks / 4
-
-    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
-
-def calculate_elevation_stats(activities):
-    today = datetime.datetime.today()
-    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
-    total_elevation = 0.0
-    elevation_last_4_weeks = 0.0
-
-    for activity in activities:
-        if activity['type'] == 'Run':
-            activity_date = parser.parse(activity['start_date_local']).date()
-            if activity_date >= start_of_4_weeks_ago.date():
-                elevation_last_4_weeks += activity['total_elevation_gain']
-            if activity_date >= datetime.datetime(today.year, 1, 1).date():
-                total_elevation += activity['total_elevation_gain']
-
-    avg_elevation_per_week = elevation_last_4_weeks / 4
-
-    return round(total_elevation, 1), round(avg_elevation_per_week, 1)
-
-def get_user_preferences(owner_id):
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
-        result = cursor.fetchone()
-        cursor.close()
-        if result:
-            return {
-                'days_run': result.get('days_run', True),
-                'total_kms': result.get('total_kms', True),
-                'avg_kms': result.get('avg_kms', True),
-                'total_elevation': result.get('total_elevation', False),
-                'avg_elevation': result.get('avg_elevation', False),
-                'avg_pace': result.get('avg_pace', False),
-                'avg_pace_per_week': result.get('avg_pace_per_week', False),
-                'beers_burnt': result.get('beers_burnt', False),
-                'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False),
-                'is_paid_user': result.get('is_paid_user', False)
-            }
-        else:
-            return {
-                'days_run': True,
-                'total_kms': True,
-                'avg_kms': True,
-                'total_elevation': False,
-                'avg_elevation': False,
-                'avg_pace': False,
-                'avg_pace_per_week': False,
-                'beers_burnt': False,
-                'pizza_slices_burnt': False,
-                'remove_promo': False,
-                'is_paid_user': False
-            }
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-        return {
-            'days_run': True,
-            'total_kms': True,
-            'avg_kms': True,
-            'total_elevation': False,
-            'avg_elevation': False,
-            'avg_pace': False,
-            'avg_pace_per_week': False,
-            'beers_burnt': False,
-            'pizza_slices_burnt': False,
-            'remove_promo': False,
-            'is_paid_user': False
-        }
     finally:
         if connection:
             connection.close()
@@ -425,6 +206,215 @@ def stripe_webhook():
                     connection.close()
 
     return '', 200
+
+@app.route('/webhook', methods=['GET', 'POST'])
+def webhook():
+    if request.method == 'GET':
+        verify_token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        if verify_token == VERIFY_TOKEN:
+            return jsonify({'hub.challenge': challenge})
+        return 'Invalid verification token', 403
+    elif request.method == 'POST':
+        event = request.json
+        print(f"Received event: {event}")
+        if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
+            handle_activity_create(event['object_id'], event['owner_id'])
+        return 'Event received', 200
+
+def handle_activity_create(activity_id, owner_id):
+    if not owner_id:
+        print("No owner_id in the request")
+        return
+
+    tokens = get_tokens_from_db(owner_id)
+    if not tokens:
+        print(f"No tokens found for owner_id {owner_id}")
+        return
+
+    access_token = tokens['access_token']
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+
+    response = requests.get(
+        'https://www.strava.com/api/v3/athlete/activities',
+        headers=headers,
+        params={'per_page': 200}
+    )
+
+    if response.status_code != 200:
+        print(f"Failed to fetch activities: {response.text}")
+        return
+
+    activities = response.json()
+    days_run, total_days = calculate_days_run_this_year(activities)
+    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+    total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
+
+    activity_response = requests.get(
+        f'https://www.strava.com/api/v3/activities/{activity_id}',
+        headers=headers
+    )
+
+    if activity_response.status_code != 200:
+        print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
+        return
+
+    activity = activity_response.json()
+    preferences = get_user_preferences(owner_id)
+    total_calories_burnt = activity.get('calories', 0)
+    beers_burnt = total_calories_burnt / 140
+    pizza_slices_burnt = total_calories_burnt / 285
+
+    new_description = ""
+    if preferences.get('days_run', True):
+        new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
+    if preferences.get('total_kms', True):
+        new_description += f"🏃 Total kms run this year: {total_kms_run:.1f} km\n"
+    if preferences.get('avg_kms', True):
+        new_description += f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n"
+    if preferences.get('total_elevation', False):
+        new_description += f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n"
+    if preferences.get('avg_elevation', False):
+        new_description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n"
+    if preferences.get('beers_burnt', False):
+        new_description += f"🍺 Beers burnt: {beers_burnt:.1f}\n"
+    if preferences.get('pizza_slices_burnt', False):
+        new_description += f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n"
+    if not preferences.get('remove_promo', False):
+        new_description += "Try for free at www.blah.com"
+
+    update_response = requests.put(
+        f'https://www.strava.com/api/v3/activities/{activity_id}',
+        headers=headers,
+        json={'description': new_description}
+    )
+
+    if update_response.status_code == 200:
+        print(f"Activity {activity_id} updated successfully")
+    else:
+        print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
+def calculate_days_run_this_year(activities):
+    today = datetime.datetime.today()
+    start_of_year = datetime.datetime(today.year, 1, 1)
+    run_dates = set()
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            run_date = parser.parse(activity['start_date_local']).date()
+            if run_date >= start_of_year.date():
+                run_dates.add(run_date)
+
+    days_run = len(run_dates)
+    total_days = (today - start_of_year).days + 1
+    return days_run, total_days
+
+def calculate_kms_stats(activities):
+    today = datetime.datetime.today()
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
+
+    total_kms_run = 0.0
+    kms_last_4_weeks = 0.0
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_4_weeks_ago.date():
+                kms_last_4_weeks += activity['distance'] / 1000
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
+                total_kms_run += activity['distance'] / 1000
+
+    avg_kms_per_week = kms_last_4_weeks / 4
+    return round(total_kms_run, 1), round(avg_kms_per_week, 1)
+
+def calculate_elevation_stats(activities):
+    today = datetime.datetime.today()
+    start_of_4_weeks_ago = today - datetime.timedelta(weeks=4)
+
+    total_elevation = 0.0
+    elevation_last_4_weeks = 0.0
+
+    for activity in activities:
+        if activity['type'] == 'Run':
+            activity_date = parser.parse(activity['start_date_local']).date()
+            if activity_date >= start_of_4_weeks_ago.date():
+                elevation_last_4_weeks += activity['total_elevation_gain']
+            if activity_date >= datetime.datetime(today.year, 1, 1).date():
+                total_elevation += activity['total_elevation_gain']
+
+    avg_elevation_per_week = elevation_last_4_weeks / 4
+    return round(total_elevation, 1), round(avg_elevation_per_week, 1)
+
+def get_user_preferences(owner_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        if result:
+            return {
+                'days_run': result.get('days_run', True),
+                'total_kms': result.get('total_kms', True),
+                'avg_kms': result.get('avg_kms', True),
+                'total_elevation': result.get('total_elevation', False),
+                'avg_elevation': result.get('avg_elevation', False),
+                'avg_pace': result.get('avg_pace', False),
+                'avg_pace_per_week': result.get('avg_pace_per_week', False),
+                'beers_burnt': result.get('beers_burnt', False),
+                'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
+                'remove_promo': result.get('remove_promo', False),
+                'is_paid_user': is_paid_user(owner_id)
+            }
+        else:
+            return {
+                'days_run': True,
+                'total_kms': True,
+                'avg_kms': True,
+                'total_elevation': False,
+                'avg_elevation': False,
+                'avg_pace': False,
+                'avg_pace_per_week': False,
+                'beers_burnt': False,
+                'pizza_slices_burnt': False,
+                'remove_promo': False,
+                'is_paid_user': is_paid_user(owner_id)
+            }
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return {
+            'days_run': True,
+            'total_kms': True,
+            'avg_kms': True,
+            'total_elevation': False,
+            'avg_elevation': False,
+            'avg_pace': False,
+            'avg_pace_per_week': False,
+            'beers_burnt': False,
+            'pizza_slices_burnt': False,
+            'remove_promo': False,
+            'is_paid_user': is_paid_user(owner_id)
+        }
+    finally:
+        if connection:
+            connection.close()
+
+def is_paid_user(athlete_id):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
+        result = cursor.fetchone()
+        cursor.close()
+        return result['is_paid_user'] == 1
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return False
+    finally:
+        if connection:
+            connection.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
