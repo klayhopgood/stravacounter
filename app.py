@@ -425,6 +425,7 @@ def subscription_success():
 
     return redirect(url_for('home'))
 
+
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
