@@ -10,49 +10,41 @@
     <form action="/update_preferences" method="post">
         <label>
             <input type="checkbox" name="days_run" {{ 'checked' if preferences.days_run else '' }}>
-            Days Run (Free)
+            Days Run
         </label><br>
         <label>
             <input type="checkbox" name="total_kms" {{ 'checked' if preferences.total_kms else '' }}>
-            Total Kms (Free)
+            Total Kms
         </label><br>
         <label>
             <input type="checkbox" name="avg_kms" {{ 'checked' if preferences.avg_kms else '' }}>
-            Average Kms (Free)
+            Average Kms
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences.total_elevation else '' }}>
+            Total Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences.avg_elevation else '' }}>
+            Average Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences.beers_burnt else '' }}>
+            Beers Burnt
         </label><br>
         <label>
             <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences.pizza_slices_burnt else '' }}>
-            Pizza Slices Burnt (Free)
-        </label><br>
-        <hr>
-        <label>
-            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences.total_elevation else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Total Elevation (Paid)
+            Pizza Slices Burnt
         </label><br>
         <label>
-            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences.avg_elevation else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Average Elevation (Paid)
-        </label><br>
-        <label>
-            <input type="checkbox" name="avg_pace" {{ 'checked' if preferences.avg_pace else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Average Pace (Paid)
-        </label><br>
-        <label>
-            <input type="checkbox" name="avg_pace_per_week" {{ 'checked' if preferences.avg_pace_per_week else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Average Pace Per Week (Paid)
-        </label><br>
-        <label>
-            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences.beers_burnt else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Beers Burnt (Paid)
-        </label><br>
-        <label>
-            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences.remove_promo else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
-            Remove Promo (Paid)
+            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences.remove_promo else '' }}>
+            Remove Promo
         </label><br>
         <button type="submit">Submit Changes</button>
     </form>
     <div class="updated-message" style="display: none;">Preferences updated</div>
     <script src="https://js.stripe.com/v3/"></script>
+    <button id="checkout-button">Sign Up</button>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const updated = urlParams.get('updated');
@@ -64,35 +56,31 @@
             }, 5000);
         }
 
-        const stripe = Stripe('pk_test_51PJDimAlw5arL9EaWWn7ZD2DmsWXQK05UK1GvspYeWLIAEZ7BvUASSno5NglMz99DmPzytnBWnzjUmvtvfhfxbXe00O7Z8juYY');
+        var stripe = Stripe('pk_test_51PJDimAlw5arL9EaWWn7ZD2DmsWXQK05UK1GvspYeWLIAEZ7BvUASSno5NglMz99DmPzytnBWnzjUmvtvfhfxbXe00O7Z8juYY');
 
-        document.addEventListener('DOMContentLoaded', (event) => {
-            const checkoutButton = document.getElementById('checkout-button');
-            if (checkoutButton) {
-                checkoutButton.addEventListener('click', async () => {
-                    console.log('Checkout button clicked');
-                    const response = await fetch('/create-checkout-session', {
-                        method: 'POST',
-                    });
-                    const session = await response.json();
-                    console.log('Session:', session);
-
-                    const result = await stripe.redirectToCheckout({
-                        sessionId: session.sessionId,
-                    });
-
-                    if (result.error) {
-                        console.error(result.error.message);
-                    }
-                });
-            } else {
-                console.error('Checkout button not found');
-            }
+        document.getElementById('checkout-button').addEventListener('click', function () {
+            fetch('/create-checkout-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (sessionId) {
+                console.log("Checkout button clicked");
+                return stripe.redirectToCheckout({ sessionId: sessionId });
+            })
+            .then(function (result) {
+                if (result.error) {
+                    alert(result.error.message);
+                }
+            })
+            .catch(function (error) {
+                console.error('Error:', error);
+            });
         });
     </script>
-    {% if not preferences.is_paid_user %}
-    <h2>Become a Paid User</h2>
-    <button id="checkout-button">Sign Up</button>
-    {% endif %}
 </body>
 </html>
