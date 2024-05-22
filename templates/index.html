@@ -3,77 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Update Preferences</title>
-    <style>
-        .preferences-form {
-            display: flex;
-            flex-direction: column;
-            width: 300px;
-            margin: 0 auto;
-        }
-        .preferences-form label {
-            margin-bottom: 10px;
-        }
-        .preferences-form button {
-            margin-top: 20px;
-        }
-        .paid-option {
-            color: grey;
-        }
-    </style>
+    <title>Preferences</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
-    <h1>Update Preferences</h1>
-    <form action="/update_preferences" method="POST" class="preferences-form">
-        <h2>Free Options</h2>
-        <label>
-            <input type="checkbox" name="days_run" {% if preferences.days_run %}checked{% endif %}> Days Run This Year
-        </label>
-        <label>
-            <input type="checkbox" name="total_kms" {% if preferences.total_kms %}checked{% endif %}> Total Kms Run This Year
-        </label>
-        <label>
-            <input type="checkbox" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}> Average Kms Per Week (Last 4 Weeks)
-        </label>
-        <label>
-            <input type="checkbox" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}> Pizza Slices Burnt
-        </label>
+    <div class="container">
+        <h1>Preferences</h1>
+        <form method="post" action="/update_preferences">
+            <div class="form-group">
+                <input type="checkbox" id="days_run" name="days_run" {% if preferences.days_run %}checked{% endif %}>
+                <label for="days_run">Days run this year</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="total_kms" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
+                <label for="total_kms">Kms run this year</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="avg_kms" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
+                <label for="avg_kms">Average kms per week (last 4 weeks)</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}>
+                <label for="pizza_slices_burnt">Pizza slices burnt</label>
+            </div>
 
-        <h2>Paid Options</h2>
-        <div class="paid-option">
-            <label>
-                <input type="checkbox" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Total Elevation Gain This Year
-            </label>
-            <label>
-                <input type="checkbox" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Elevation Per Week (Last 4 Weeks)
-            </label>
-            <label>
-                <input type="checkbox" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Pace
-            </label>
-            <label>
-                <input type="checkbox" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Pace Per Week
-            </label>
-            <label>
-                <input type="checkbox" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Beers Burnt
-            </label>
-            <label>
-                <input type="checkbox" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Remove Promo
-            </label>
-        </div>
-
-        <button type="submit">Update Preferences</button>
-    </form>
-
-    {% if not preferences.is_paid_user %}
-        <h2>Become a Paid User</h2>
-        <form action="/create-checkout-session" method="POST">
-            <button id="checkout-button">Sign Up</button>
+            {% if preferences.is_paid_user %}
+            <div class="form-group">
+                <input type="checkbox" id="total_elevation" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %}>
+                <label for="total_elevation">Total elevation gain this year</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="avg_elevation" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %}>
+                <label for="avg_elevation">Average elevation per week (last 4 weeks)</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="beers_burnt" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %}>
+                <label for="beers_burnt">Beers burnt</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="avg_pace" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %}>
+                <label for="avg_pace">Average pace</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %}>
+                <label for="avg_pace_per_week">Average pace per week</label>
+            </div>
+            <div class="form-group">
+                <input type="checkbox" id="remove_promo" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %}>
+                <label for="remove_promo">Remove promotional content</label>
+            </div>
+            {% else %}
+            <div class="form-group">
+                <button type="button" id="subscribe" class="btn btn-primary">Subscribe for more options</button>
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-success">Update Preferences</button>
         </form>
-    {% else %}
-        <h2>Manage Subscription</h2>
-        <form action="/unsubscribe" method="POST">
-            <button type="submit">Unsubscribe</button>
+
+        {% if preferences.is_paid_user %}
+        <form method="post" action="/unsubscribe">
+            <button type="submit" class="btn btn-danger">Unsubscribe</button>
         </form>
-    {% endif %}
+        {% endif %}
+    </div>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script>
+        document.getElementById('subscribe').addEventListener('click', function () {
+            fetch('/create-checkout-session', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(session => {
+                return stripe.redirectToCheckout({ sessionId: session.id });
+            })
+            .then(result => {
+                if (result.error) {
+                    alert(result.error.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
 </body>
 </html>
