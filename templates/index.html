@@ -66,18 +66,27 @@
 
         const stripe = Stripe('pk_test_51PJDimAlw5arL9EaWWn7ZD2DmsWXQK05UK1GvspYeWLIAEZ7BvUASSno5NglMz99DmPzytnBWnzjUmvtvfhfxbXe00O7Z8juYY');
 
-        document.getElementById('checkout-button').addEventListener('click', async () => {
-            const response = await fetch('/create-checkout-session', {
-                method: 'POST',
-            });
-            const session = await response.json();
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const checkoutButton = document.getElementById('checkout-button');
+            if (checkoutButton) {
+                checkoutButton.addEventListener('click', async () => {
+                    console.log('Checkout button clicked');
+                    const response = await fetch('/create-checkout-session', {
+                        method: 'POST',
+                    });
+                    const session = await response.json();
+                    console.log('Session:', session);
 
-            const result = await stripe.redirectToCheckout({
-                sessionId: session.sessionId,
-            });
+                    const result = await stripe.redirectToCheckout({
+                        sessionId: session.sessionId,
+                    });
 
-            if (result.error) {
-                console.error(result.error.message);
+                    if (result.error) {
+                        console.error(result.error.message);
+                    }
+                });
+            } else {
+                console.error('Checkout button not found');
             }
         });
     </script>

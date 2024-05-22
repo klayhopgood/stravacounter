@@ -392,12 +392,14 @@ def create_checkout_session():
                     'price': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual price ID
                 }],
             },
+            mode='subscription',
             success_url=url_for('subscription_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
             cancel_url=url_for('home', _external=True),
         )
         return jsonify({'sessionId': session_stripe['id']})
     except Exception as e:
         return jsonify(error=str(e)), 403
+
 
 @app.route('/subscription-success')
 def subscription_success():
@@ -424,7 +426,6 @@ def subscription_success():
                 connection.close()
 
     return redirect(url_for('home'))
-
 
 @app.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
