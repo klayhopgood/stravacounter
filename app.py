@@ -389,7 +389,7 @@ def create_checkout_session():
             payment_method_types=['card'],
             subscription_data={
                 'items': [{
-                    'plan': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual plan ID
+                    'price': 'price_1PJEMaAlw5arL9Eaq14rYBu1',  # Replace with your actual price ID
                 }],
             },
             success_url=url_for('subscription_success', _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
@@ -440,20 +440,22 @@ def stripe_webhook():
     if event['type'] == 'invoice.payment_succeeded':
         customer_id = event['data']['object']['customer']
         athlete_id = get_athlete_id_by_stripe_customer_id(customer_id)
-        try:
-            connection = get_db_connection()
-            cursor = connection.cursor()
-            cursor.execute("""
-                UPDATE strava_tokens SET is_paid_user = 1 WHERE athlete_id = %s
-            """, (athlete_id,))
-            connection.commit()
-        except mysql.connector.Error as err:
-            print(f"Error: {err.msg}")
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+
+        if athlete_id:
+            try:
+                connection = get_db_connection()
+                cursor = connection.cursor()
+                cursor.execute("""
+                    UPDATE strava_tokens SET is_paid_user = 1 WHERE athlete_id = %s
+                """, (athlete_id,))
+                connection.commit()
+            except mysql.connector.Error as err:
+                print(f"Error: {err.msg}")
+            finally:
+                if cursor:
+                    cursor.close()
+                if connection:
+                    connection.close()
 
     return '', 200
 

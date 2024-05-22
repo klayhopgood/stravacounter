@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Preferences</title>
-    <script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
     <h1>Strava Preferences</h1>
@@ -25,40 +24,35 @@
             <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences.pizza_slices_burnt else '' }}>
             Pizza Slices Burnt (Free)
         </label><br>
-
-        <!-- Paid options section -->
-        <div class="paid-options">
-            <h2>Paid Options</h2>
-            <p>Subscribe to unlock the following features:</p>
-            <label>
-                <input type="checkbox" name="total_elevation" {{ 'checked' if preferences.total_elevation else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
-                Total Elevation (Paid)
-            </label><br>
-            <label>
-                <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences.avg_elevation else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
-                Average Elevation (Paid)
-            </label><br>
-            <label>
-                <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences.beers_burnt else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
-                Beers Burnt (Paid)
-            </label><br>
-            <label>
-                <input type="checkbox" name="remove_promo" {{ 'checked' if preferences.remove_promo else '' }} {{ 'disabled' if not preferences.is_paid_user else '' }}>
-                Remove Promo (Paid)
-            </label><br>
-        </div>
-
+        <hr>
+        <label>
+            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences.total_elevation else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Total Elevation (Paid)
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences.avg_elevation else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Average Elevation (Paid)
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_pace" {{ 'checked' if preferences.avg_pace else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Average Pace (Paid)
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_pace_per_week" {{ 'checked' if preferences.avg_pace_per_week else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Average Pace Per Week (Paid)
+        </label><br>
+        <label>
+            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences.beers_burnt else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Beers Burnt (Paid)
+        </label><br>
+        <label>
+            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences.remove_promo else '' }} {% if not preferences.is_paid_user %} disabled {% endif %}>
+            Remove Promo (Paid)
+        </label><br>
         <button type="submit">Submit Changes</button>
     </form>
-
-    <!-- Display message if preferences were updated -->
     <div class="updated-message" style="display: none;">Preferences updated</div>
-
-    <!-- Stripe button for becoming a paid user -->
-    <div class="stripe-button" {{ 'style=display:none;' if preferences.is_paid_user else '' }}>
-        <button id="checkout-button">Become a Paid User</button>
-    </div>
-
+    <script src="https://js.stripe.com/v3/"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const updated = urlParams.get('updated');
@@ -70,32 +64,26 @@
             }, 5000);
         }
 
-        // Stripe Checkout integration
-        var stripe = Stripe('your_publishable_key_here');
-        var checkoutButton = document.getElementById('checkout-button');
+        const stripe = Stripe('pk_test_your_public_key');  // Replace with your Stripe public key
 
-        checkoutButton.addEventListener('click', function () {
-            fetch('/create-checkout-session', {
+        document.getElementById('checkout-button').addEventListener('click', async () => {
+            const response = await fetch('/create-checkout-session', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(function (response) {
-                return response.json();
-            })
-            .then(function (sessionId) {
-                return stripe.redirectToCheckout({ sessionId: sessionId });
-            })
-            .then(function (result) {
-                if (result.error) {
-                    alert(result.error.message);
-                }
-            })
-            .catch(function (error) {
-                console.error('Error:', error);
             });
+            const session = await response.json();
+
+            const result = await stripe.redirectToCheckout({
+                sessionId: session.sessionId,
+            });
+
+            if (result.error) {
+                console.error(result.error.message);
+            }
         });
     </script>
+    {% if not preferences.is_paid_user %}
+    <h2>Become a Paid User</h2>
+    <button id="checkout-button">Sign Up</button>
+    {% endif %}
 </body>
 </html>
