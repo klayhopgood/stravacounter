@@ -2,79 +2,72 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>User Preferences</title>
+    <title>Preferences</title>
+    <style>
+        .preferences-form label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        .preferences-form input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .paid-option {
+            color: grey;
+        }
+    </style>
 </head>
 <body>
-    <h1>User Preferences</h1>
-    <form action="/update_preferences" method="POST">
-        <fieldset>
-            <legend>Free Options</legend>
-            <label>
-                <input type="checkbox" name="days_run" {% if preferences.days_run %}checked{% endif %}>
-                Days run this year
-            </label><br>
-            <label>
-                <input type="checkbox" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
-                Total kms run this year
-            </label><br>
-            <label>
-                <input type="checkbox" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
-                Average kms per week (last 4 weeks)
-            </label><br>
-            <label>
-                <input type="checkbox" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}>
-                Pizza slices burnt
-            </label><br>
-        </fieldset>
+    <h1>Update Preferences</h1>
+    <form action="/update_preferences" method="POST" class="preferences-form">
+        <h2>Free Options</h2>
+        <label>
+            <input type="checkbox" name="days_run" {% if preferences.days_run %}checked{% endif %}> Days Run This Year
+        </label>
+        <label>
+            <input type="checkbox" name="total_kms" {% if preferences.total_kms %}checked{% endif %}> Total Kms Run This Year
+        </label>
+        <label>
+            <input type="checkbox" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}> Average Kms Per Week (Last 4 Weeks)
+        </label>
+        <label>
+            <input type="checkbox" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}> Pizza Slices Burnt
+        </label>
 
-        <fieldset>
-            <legend>Paid Options</legend>
+        <h2>Paid Options</h2>
+        <div class="paid-option">
             <label>
-                <input type="checkbox" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Total elevation gain this year
-            </label><br>
+                <input type="checkbox" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Total Elevation Gain This Year
+            </label>
             <label>
-                <input type="checkbox" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Average elevation per week (last 4 weeks)
-            </label><br>
+                <input type="checkbox" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Elevation Per Week (Last 4 Weeks)
+            </label>
             <label>
-                <input type="checkbox" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Average pace
-            </label><br>
+                <input type="checkbox" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Pace
+            </label>
             <label>
-                <input type="checkbox" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Average pace per week
-            </label><br>
+                <input type="checkbox" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Average Pace Per Week
+            </label>
             <label>
-                <input type="checkbox" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Beers burnt
-            </label><br>
+                <input type="checkbox" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Beers Burnt
+            </label>
             <label>
-                <input type="checkbox" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}>
-                Remove promo
-            </label><br>
-        </fieldset>
+                <input type="checkbox" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %} {% if not preferences.is_paid_user %}disabled{% endif %}> Remove Promo
+            </label>
+        </div>
 
-        <input type="submit" value="Update Preferences">
+        <button type="submit">Update Preferences</button>
     </form>
 
     {% if not preferences.is_paid_user %}
-    <button id="checkout-button">Sign Up for Paid Features</button>
+        <h2>Become a Paid User</h2>
+        <form action="/create-checkout-session" method="POST">
+            <button id="checkout-button">Sign Up</button>
+        </form>
+    {% else %}
+        <h2>Manage Subscription</h2>
+        <form action="/unsubscribe" method="POST">
+            <button type="submit">Unsubscribe</button>
+        </form>
     {% endif %}
-
-    <script src="https://js.stripe.com/v3/"></script>
-    <script>
-        document.getElementById('checkout-button').addEventListener('click', async () => {
-            const response = await fetch('/create-checkout-session', {
-                method: 'POST',
-            });
-            const session = await response.json();
-            if (session.url) {
-                window.location = session.url;
-            } else {
-                console.error('Error creating Stripe Checkout session:', session.error);
-            }
-        });
-    </script>
 </body>
 </html>

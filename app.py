@@ -73,6 +73,23 @@ def login_callback():
     else:
         return 'Authorization code not received.'
 
+@app.route('/deauthorize')
+def deauthorize():
+    access_token = session.get('access_token')
+    if access_token:
+        deauthorize_url = 'https://www.strava.com/oauth/deauthorize'
+        response = requests.post(deauthorize_url, data={'access_token': access_token})
+        if response.status_code == 200:
+            session.pop('access_token', None)
+            session.pop('refresh_token', None)
+            session.pop('expires_at', None)
+            session.pop('athlete_id', None)
+            return redirect('/')
+        else:
+            return 'Failed to deauthorize. Error: ' + response.text
+    else:
+        return redirect('/')
+
 def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
@@ -170,6 +187,10 @@ def create_checkout_session():
     except Exception as e:
         return jsonify(error=str(e)), 403
 
+@app.route('/subscription-success')
+def subscription_success():
+    return render_template('subscription_success.html')
+
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
     payload = request.get_data(as_text=True)
@@ -186,41 +207,29 @@ def stripe_webhook():
 
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        customer_id = session['customer']
         client_reference_id = session.get('client_reference_id')
-
         if client_reference_id:
-            try:
-                connection = get_db_connection()
-                cursor = connection.cursor()
-                cursor.execute("""
-                    UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
-                """, (customer_id, client_reference_id))
-                connection.commit()
-            except mysql.connector.Error as err:
-                print(f"Error: {err.msg}")
-            finally:
-                if cursor:
-                    cursor.close()
-                if connection:
-                    connection.close()
+            update_paid_status(client_reference_id, True)
 
-    return '', 200
+    return 'Success', 200
 
-@app.route('/webhook', methods=['GET', 'POST'])
-def webhook():
-    if request.method == 'GET':
-        verify_token = request.args.get('hub.verify_token')
-        challenge = request.args.get('hub.challenge')
-        if verify_token == VERIFY_TOKEN:
-            return jsonify({'hub.challenge': challenge})
-        return 'Invalid verification token', 403
-    elif request.method == 'POST':
-        event = request.json
-        print(f"Received event: {event}")
-        if event['object_type'] == 'activity' and event['aspect_type'] == 'create':
-            handle_activity_create(event['object_id'], event['owner_id'])
-        return 'Event received', 200
+def update_paid_status(athlete_id, is_paid):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE strava_tokens
+            SET is_paid_user = %s
+            WHERE athlete_id = %s
+        """, (is_paid, athlete_id))
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 def handle_activity_create(activity_id, owner_id):
     if not owner_id:
@@ -233,9 +242,7 @@ def handle_activity_create(activity_id, owner_id):
         return
 
     access_token = tokens['access_token']
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
+    headers = {'Authorization': f'Bearer {access_token}'}
 
     response = requests.get(
         'https://www.strava.com/api/v3/athlete/activities',
