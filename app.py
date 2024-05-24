@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify, render_template, session, url_for
+from flask import Flask, request, redirect, jsonify, render_template, session, url_for, flash
 import requests
 import mysql.connector
 import datetime
@@ -77,14 +77,13 @@ def login_callback():
             print(f"Session: {session}")
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
+            session.modified = True  # Ensure the session is saved
 
             return redirect(url_for('dashboard'))
         else:
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
-
-
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -150,7 +149,6 @@ def dashboard():
     preferences = get_user_preferences(owner_id)
     print(f"Loaded preferences for {owner_id}: {preferences}")
     return render_template('dashboard.html', preferences=preferences)
-
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -391,19 +389,17 @@ def update_preferences():
                 remove_promo = VALUES(remove_promo)
         """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
         connection.commit()
+        flash("Preferences updated successfully.", "success")
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
+        flash("Failed to update preferences.", "danger")
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
 
-    return render_template('dashboard.html', preferences=preferences, updated=True)
-
+    return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-
-
