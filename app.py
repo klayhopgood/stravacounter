@@ -6,26 +6,23 @@ from mysql.connector import errorcode
 import secrets
 from dateutil import parser
 from flask_session import Session
-from stravalib import Client
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
-app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+app.secret_key = secrets.token_hex(16)
+app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
-# Strava credentials
-CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+CLIENT_ID = '99652'
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
 VERIFY_TOKEN = 'STRAVA'
 
-# Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
     'ssl_disabled': False
 }
 
@@ -38,37 +35,40 @@ def home():
 
 @app.route('/login')
 def login():
-    client = Client()
     redirect_uri = url_for('login_callback', _external=True)
-    authorize_url = client.authorization_url(
-        client_id=CLIENT_ID,
-        redirect_uri=redirect_uri,
-        approval_prompt='force',
-        scope=['activity:write', 'activity:read_all']
-    )
+    authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
 @app.route('/login/callback')
 def login_callback():
     code = request.args.get('code')
     if code:
-        client = Client()
-        token_response = client.exchange_code_for_token(
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
-            code=code
-        )
-        session['access_token'] = token_response['access_token']
-        session['refresh_token'] = token_response['refresh_token']
-        session['expires_at'] = token_response['expires_at']
-        athlete = client.get_athlete()
-        session['athlete_id'] = athlete.id
+        token_url = 'https://www.strava.com/oauth/token'
+        payload = {
+            'client_id': CLIENT_ID,
+            'client_secret': CLIENT_SECRET,
+            'code': code,
+            'grant_type': 'authorization_code',
+        }
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            tokens = response.json()
+            access_token = tokens.get('access_token')
+            refresh_token = tokens.get('refresh_token')
+            expires_at = tokens.get('expires_at')
+            athlete_id = str(tokens.get('athlete').get('id'))
 
-        save_tokens_to_db(athlete.id, athlete.id, token_response['access_token'], token_response['refresh_token'], token_response['expires_at'])
+            session['access_token'] = access_token
+            session['refresh_token'] = refresh_token
+            session['expires_at'] = expires_at
+            session['athlete_id'] = athlete_id
 
-        preferences = get_user_preferences(athlete.id)
-        is_paid_user = preferences.get('is_paid_user', 0)
-        return render_template('index.html', preferences=preferences, is_paid_user=is_paid_user)
+            save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
+
+            preferences = get_user_preferences(athlete_id)
+            return render_template('index.html', preferences=preferences, is_paid_user=preferences['is_paid_user'])
+        else:
+            return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
 
@@ -89,7 +89,7 @@ def deauthorize():
     else:
         return redirect('/')
 
-def save_tokens_to_db(athlete_id, owner_id, access_token, refresh_token, expires_at):
+def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -101,7 +101,7 @@ def save_tokens_to_db(athlete_id, owner_id, access_token, refresh_token, expires
                 refresh_token = VALUES(refresh_token),
                 expires_at = VALUES(expires_at),
                 owner_id = VALUES(owner_id)
-        """, (athlete_id, owner_id, access_token, refresh_token, expires_at))
+        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -171,7 +171,6 @@ def handle_activity_create(activity_id, owner_id):
     total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
-    # Get the activity to update
     activity_response = requests.get(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers
@@ -183,15 +182,12 @@ def handle_activity_create(activity_id, owner_id):
 
     activity = activity_response.json()
 
-    # Fetch user preferences
     preferences = get_user_preferences(owner_id)
 
-    # Calculate calories burnt for this activity
     total_calories_burnt = activity.get('calories', 0)
     beers_burnt = total_calories_burnt / 140
     pizza_slices_burnt = total_calories_burnt / 285
 
-    # Build the new description based on preferences
     new_description = ""
     if preferences.get('days_run', True):
         new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
@@ -213,7 +209,7 @@ def handle_activity_create(activity_id, owner_id):
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': new_description}  # Use JSON data
+        json={'description': new_description}
     )
 
     if update_response.status_code == 200:
@@ -291,11 +287,11 @@ def get_user_preferences(owner_id):
                 'total_elevation': result.get('total_elevation', False),
                 'avg_elevation': result.get('avg_elevation', False),
                 'avg_pace': result.get('avg_pace', False),
-                'avg_pace_per_week': result.get('avg_pace_per_week', False),
+                'avg_pace_week': result.get('avg_pace_week', False),
                 'beers_burnt': result.get('beers_burnt', False),
                 'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False),
-                'is_paid_user': result.get('is_paid_user', False)
+                'remove_ad': result.get('remove_ad', False),
+                'is_paid_user': result.get('is_paid_user', False),
             }
         else:
             return {
@@ -305,11 +301,11 @@ def get_user_preferences(owner_id):
                 'total_elevation': False,
                 'avg_elevation': False,
                 'avg_pace': False,
-                'avg_pace_per_week': False,
+                'avg_pace_week': False,
                 'beers_burnt': False,
                 'pizza_slices_burnt': False,
-                'remove_promo': False,
-                'is_paid_user': False
+                'remove_ad': False,
+                'is_paid_user': False,
             }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -320,11 +316,11 @@ def get_user_preferences(owner_id):
             'total_elevation': False,
             'avg_elevation': False,
             'avg_pace': False,
-            'avg_pace_per_week': False,
+            'avg_pace_week': False,
             'beers_burnt': False,
             'pizza_slices_burnt': False,
-            'remove_promo': False,
-            'is_paid_user': False
+            'remove_ad': False,
+            'is_paid_user': False,
         }
     finally:
         if connection:
@@ -333,7 +329,6 @@ def get_user_preferences(owner_id):
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
-    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
     if not owner_id:
         return 'User not authenticated', 403
 
@@ -344,17 +339,17 @@ def update_preferences():
         'total_elevation': 1 if 'total_elevation' in request.form else 0,
         'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
         'avg_pace': 1 if 'avg_pace' in request.form else 0,
-        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
+        'avg_pace_week': 1 if 'avg_pace_week' in request.form else 0,
         'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
         'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
-        'remove_promo': 1 if 'remove_promo' in request.form else 0
+        'remove_ad': 1 if 'remove_ad' in request.form else 0
     }
 
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         cursor.execute("""
-            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
+            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_week, beers_burnt, pizza_slices_burnt, remove_ad)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 days_run = VALUES(days_run),
@@ -363,11 +358,11 @@ def update_preferences():
                 total_elevation = VALUES(total_elevation),
                 avg_elevation = VALUES(avg_elevation),
                 avg_pace = VALUES(avg_pace),
-                avg_pace_per_week = VALUES(avg_pace_per_week),
+                avg_pace_week = VALUES(avg_pace_week),
                 beers_burnt = VALUES(beers_burnt),
                 pizza_slices_burnt = VALUES(pizza_slices_burnt),
-                remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
+                remove_ad = VALUES(remove_ad)
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_ad']))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -377,11 +372,32 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return render_template('index.html', preferences=preferences, updated=True, is_paid_user=preferences.get('is_paid_user', 0))
+    return render_template('index.html', preferences=preferences, is_paid_user=True, updated=True)
 
 @app.route('/subscribe')
 def subscribe():
     return redirect("https://buy.stripe.com/test_aEUeXf8AVcvVdA4000")
+
+@app.route('/unsubscribe')
+def unsubscribe():
+    owner_id = session.get('athlete_id')
+    if not owner_id:
+        return 'User not authenticated', 403
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("UPDATE user_preferences SET is_paid_user = 0 WHERE owner_id = %s", (owner_id,))
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+    return redirect(url_for('home'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
