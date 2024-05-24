@@ -64,10 +64,11 @@ def login_callback():
         athlete = client.get_athlete()
         session['athlete_id'] = athlete.id
 
-        save_tokens_to_db(athlete.id, token_response['access_token'], token_response['refresh_token'], token_response['expires_at'])
+        save_tokens_to_db(athlete.id, athlete.id, token_response['access_token'], token_response['refresh_token'], token_response['expires_at'])
 
         preferences = get_user_preferences(athlete.id)
-        return render_template('index.html', preferences=preferences)
+        is_paid_user = preferences.get('is_paid_user', 0)
+        return render_template('index.html', preferences=preferences, is_paid_user=is_paid_user)
     else:
         return 'Authorization code not received.'
 
@@ -88,7 +89,7 @@ def deauthorize():
     else:
         return redirect('/')
 
-def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
+def save_tokens_to_db(athlete_id, owner_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -100,7 +101,7 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
                 refresh_token = VALUES(refresh_token),
                 expires_at = VALUES(expires_at),
                 owner_id = VALUES(owner_id)
-        """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
+        """, (athlete_id, owner_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -114,7 +115,7 @@ def get_tokens_from_db(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (owner_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
@@ -293,7 +294,8 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': result.get('avg_pace_per_week', False),
                 'beers_burnt': result.get('beers_burnt', False),
                 'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False)
+                'remove_promo': result.get('remove_promo', False),
+                'is_paid_user': result.get('is_paid_user', False)
             }
         else:
             return {
@@ -306,7 +308,8 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': False,
                 'beers_burnt': False,
                 'pizza_slices_burnt': False,
-                'remove_promo': False
+                'remove_promo': False,
+                'is_paid_user': False
             }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -320,7 +323,8 @@ def get_user_preferences(owner_id):
             'avg_pace_per_week': False,
             'beers_burnt': False,
             'pizza_slices_burnt': False,
-            'remove_promo': False
+            'remove_promo': False,
+            'is_paid_user': False
         }
     finally:
         if connection:
@@ -373,7 +377,11 @@ def update_preferences():
         if connection:
             connection.close()
 
-    return render_template('index.html', preferences=preferences, updated=True)
+    return render_template('index.html', preferences=preferences, updated=True, is_paid_user=preferences.get('is_paid_user', 0))
+
+@app.route('/subscribe')
+def subscribe():
+    return redirect("https://buy.stripe.com/test_aEUeXf8AVcvVdA4000")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

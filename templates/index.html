@@ -3,88 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Preferences</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <title>Strava Preferences</title>
 </head>
 <body>
-    <div class="container">
-        <h1>Preferences</h1>
-        <form method="post" action="/update_preferences">
-            <div class="form-group">
-                <input type="checkbox" id="days_run" name="days_run" {% if preferences.days_run %}checked{% endif %}>
-                <label for="days_run">Days run this year</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="total_kms" name="total_kms" {% if preferences.total_kms %}checked{% endif %}>
-                <label for="total_kms">Kms run this year</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="avg_kms" name="avg_kms" {% if preferences.avg_kms %}checked{% endif %}>
-                <label for="avg_kms">Average kms per week (last 4 weeks)</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="pizza_slices_burnt" name="pizza_slices_burnt" {% if preferences.pizza_slices_burnt %}checked{% endif %}>
-                <label for="pizza_slices_burnt">Pizza slices burnt</label>
-            </div>
+    <h1>Strava Preferences</h1>
+    <form action="/update_preferences" method="post">
+        <label>
+            <input type="checkbox" name="days_run" {{ 'checked' if preferences['days_run'] else '' }}>
+            Days Run
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_kms" {{ 'checked' if preferences['total_kms'] else '' }}>
+            Total Kms
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_kms" {{ 'checked' if preferences['avg_kms'] else '' }}>
+            Average Kms
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences['total_elevation'] else '' }}>
+            Total Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences['avg_elevation'] else '' }}>
+            Average Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences['beers_burnt'] else '' }}>
+            Beers Burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences['pizza_slices_burnt'] else '' }}>
+            Pizza Slices Burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences['remove_promo'] else '' }}>
+            Remove Promo
+        </label><br>
+        <button type="submit">Submit Changes</button>
+    </form>
+    <div class="updated-message" style="display: {{ 'block' if updated else 'none' }};">Preferences updated</div>
 
-            {% if preferences.is_paid_user %}
-            <div class="form-group">
-                <input type="checkbox" id="total_elevation" name="total_elevation" {% if preferences.total_elevation %}checked{% endif %}>
-                <label for="total_elevation">Total elevation gain this year</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="avg_elevation" name="avg_elevation" {% if preferences.avg_elevation %}checked{% endif %}>
-                <label for="avg_elevation">Average elevation per week (last 4 weeks)</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="beers_burnt" name="beers_burnt" {% if preferences.beers_burnt %}checked{% endif %}>
-                <label for="beers_burnt">Beers burnt</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="avg_pace" name="avg_pace" {% if preferences.avg_pace %}checked{% endif %}>
-                <label for="avg_pace">Average pace</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="avg_pace_per_week" name="avg_pace_per_week" {% if preferences.avg_pace_per_week %}checked{% endif %}>
-                <label for="avg_pace_per_week">Average pace per week</label>
-            </div>
-            <div class="form-group">
-                <input type="checkbox" id="remove_promo" name="remove_promo" {% if preferences.remove_promo %}checked{% endif %}>
-                <label for="remove_promo">Remove promotional content</label>
-            </div>
-            {% else %}
-            <div class="form-group">
-                <button type="button" id="subscribe" class="btn btn-primary">Subscribe for more options</button>
-            </div>
-            {% endif %}
-            <button type="submit" class="btn btn-success">Update Preferences</button>
-        </form>
-
-        {% if preferences.is_paid_user %}
-        <form method="post" action="/unsubscribe">
-            <button type="submit" class="btn btn-danger">Unsubscribe</button>
-        </form>
-        {% endif %}
-    </div>
-    <script src="https://js.stripe.com/v3/"></script>
-    <script>
-        document.getElementById('subscribe').addEventListener('click', function () {
-            fetch('/create-checkout-session', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(session => {
-                return stripe.redirectToCheckout({ sessionId: session.id });
-            })
-            .then(result => {
-                if (result.error) {
-                    alert(result.error.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        });
-    </script>
+    {% if not is_paid_user %}
+    <a href="/subscribe" class="btn btn-primary">Subscribe for more options</a>
+    {% endif %}
 </body>
 </html>
