@@ -4,82 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strava Preferences</title>
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f8f9fa;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px 0px rgba(0, 0, 0, 0.1);
-        }
-
-        h1 {
-            margin-top: 0;
-        }
-
-        .btn-primary {
-            background-color: #1E88E5;
-            border-color: #1E88E5;
-        }
-
-        .btn-primary:hover {
-            background-color: #0d47a1;
-            border-color: #0d47a1;
-        }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Strava Preferences</h1>
-        <form action="/update_preferences" method="post">
-            <label>
-                <input type="checkbox" name="days_run" {{ 'checked' if preferences['days_run'] else '' }}>
-                Days Run
-            </label><br>
-            <label>
-                <input type="checkbox" name="total_kms" {{ 'checked' if preferences['total_kms'] else '' }}>
-                Total Kms
-            </label><br>
-            <label>
-                <input type="checkbox" name="avg_kms" {{ 'checked' if preferences['avg_kms'] else '' }}>
-                Average Kms
-            </label><br>
-            <label>
-                <input type="checkbox" name="total_elevation" {{ 'checked' if preferences['total_elevation'] else '' }}>
-                Total Elevation
-            </label><br>
-            <label>
-                <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences['avg_elevation'] else '' }}>
-                Average Elevation
-            </label><br>
-            <label>
-                <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences['beers_burnt'] else '' }}>
-                Beers Burnt
-            </label><br>
-            <label>
-                <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences['pizza_slices_burnt'] else '' }}>
-                Pizza Slices Burnt
-            </label><br>
-            <label>
-                <input type="checkbox" name="remove_promo" {{ 'checked' if preferences['remove_promo'] else '' }}>
-                Remove Promo
-            </label><br>
-            <button type="submit" class="btn btn-primary">Submit Changes</button>
-        </form>
-        {% if is_paid_user %}
-            <a href="/unsubscribe" class="btn btn-danger mt-3">Unsubscribe</a>
-        {% else %}
-            <a href="/subscribe" class="btn btn-success mt-3">Sign up for more options</a>
-        {% endif %}
-        <div class="updated-message mt-3" style="display: {{ 'block' if updated else 'none' }};">Preferences updated</div>
-    </div>
+    <h1>Strava Preferences</h1>
+    <form action="/update_preferences" method="post">
+        <label>
+            <input type="checkbox" name="days_run" {{ 'checked' if preferences['days_run'] else '' }}>
+            Days Run
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_kms" {{ 'checked' if preferences['total_kms'] else '' }}>
+            Total Kms
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_kms" {{ 'checked' if preferences['avg_kms'] else '' }}>
+            Average Kms
+        </label><br>
+        <label>
+            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences['total_elevation'] else '' }}>
+            Total Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences['avg_elevation'] else '' }}>
+            Average Elevation
+        </label><br>
+        <label>
+            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences['beers_burnt'] else '' }}>
+            Beers Burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences['pizza_slices_burnt'] else '' }}>
+            Pizza Slices Burnt
+        </label><br>
+        <label>
+            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences['remove_promo'] else '' }}>
+            Remove Promo
+        </label><br>
+        <button type="submit">Submit Changes</button>
+    </form>
+    <div class="updated-message" style="display: {{ 'block' if updated else 'none' }};">Preferences updated</div>
+    {% if is_paid_user %}
+    <a href="/unsubscribe" class="btn btn-danger">Unsubscribe</a>
+    {% else %}
+    <a href="/subscribe" class="btn btn-primary">Sign up for more options</a>
+    {% endif %}
 </body>
 </html>
