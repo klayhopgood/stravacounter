@@ -1,30 +1,31 @@
-import stripe
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import requests
 import mysql.connector
-from mysql.connector import errorcode
 import datetime
-from dateutil import parser
+from mysql.connector import errorcode
 import secrets
+from dateutil import parser
 from flask_session import Session
+from stravalib import Client
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
-app.config['SESSION_TYPE'] = 'filesystem'
+app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
+app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
 Session(app)
 
-# Stripe credentials
-stripe.api_key = 'sk_test_51PJDimAlw5arL9EanWVm9Jg9yF5ZiFgnLx3tzh5Snx2fbW2TduAATIB1Lzmf4gQiYscwGRKZxavu89UVqubbjbqh00dRAB8Kme'
-endpoint_secret = 'whsec_SpYHjmZTR6G7iowQFSHSkXngW4ewqRLr'
+# Strava credentials
+CLIENT_ID = '99652'  # Replace with your Strava client ID
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
     'ssl_disabled': False
 }
 
@@ -37,41 +38,55 @@ def home():
 
 @app.route('/login')
 def login():
+    client = Client()
     redirect_uri = url_for('login_callback', _external=True)
-    authorize_url = f'https://www.strava.com/oauth/authorize?client_id=99652&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
+    authorize_url = client.authorization_url(
+        client_id=CLIENT_ID,
+        redirect_uri=redirect_uri,
+        approval_prompt='force',
+        scope=['activity:write', 'activity:read_all']
+    )
     return redirect(authorize_url)
 
 @app.route('/login/callback')
 def login_callback():
     code = request.args.get('code')
     if code:
-        token_url = 'https://www.strava.com/oauth/token'
-        payload = {
-            'client_id': '99652',
-            'client_secret': '2dc10e8d62b4925837aac970b6258fc3eae96c63',
-            'code': code,
-            'grant_type': 'authorization_code',
-        }
-        response = requests.post(token_url, data=payload)
-        if response.status_code == 200:
-            tokens = response.json()
-            access_token = tokens.get('access_token')
-            refresh_token = tokens.get('refresh_token')
-            expires_at = tokens.get('expires_at')
-            athlete_id = str(tokens.get('athlete').get('id'))
+        client = Client()
+        token_response = client.exchange_code_for_token(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            code=code
+        )
+        session['access_token'] = token_response['access_token']
+        session['refresh_token'] = token_response['refresh_token']
+        session['expires_at'] = token_response['expires_at']
+        athlete = client.get_athlete()
+        session['athlete_id'] = athlete.id
 
-            session['access_token'] = access_token
-            session['refresh_token'] = refresh_token
-            session['expires_at'] = expires_at
-            session['athlete_id'] = athlete_id
+        save_tokens_to_db(athlete.id, token_response['access_token'], token_response['refresh_token'], token_response['expires_at'])
 
-            save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
-            preferences = get_user_preferences(athlete_id)
-            return render_template('index.html', preferences=preferences)
-        else:
-            return 'Failed to login. Error: ' + response.text
+        preferences = get_user_preferences(athlete.id)
+        return render_template('index.html', preferences=preferences)
     else:
         return 'Authorization code not received.'
+
+@app.route('/deauthorize')
+def deauthorize():
+    access_token = session.get('access_token')
+    if access_token:
+        deauthorize_url = 'https://www.strava.com/oauth/deauthorize'
+        response = requests.post(deauthorize_url, data={'access_token': access_token})
+        if response.status_code == 200:
+            session.pop('access_token', None)
+            session.pop('refresh_token', None)
+            session.pop('expires_at', None)
+            session.pop('athlete_id', None)
+            return redirect('/')
+        else:
+            return 'Failed to deauthorize. Error: ' + response.text
+    else:
+        return redirect('/')
 
 def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
@@ -99,7 +114,7 @@ def get_tokens_from_db(owner_id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE owner_id = %s", (owner_id,))
+        cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE athlete_id = %s", (owner_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
@@ -109,103 +124,6 @@ def get_tokens_from_db(owner_id):
     finally:
         if connection:
             connection.close()
-
-@app.route('/update_preferences', methods=['POST'])
-def update_preferences():
-    owner_id = session.get('athlete_id')
-    if not owner_id:
-        return 'User not authenticated', 403
-
-    preferences = {
-        'days_run': 'days_run' in request.form,
-        'total_kms': 'total_kms' in request.form,
-        'avg_kms': 'avg_kms' in request.form,
-        'total_elevation': 'total_elevation' in request.form,
-        'avg_elevation': 'avg_elevation' in request.form,
-        'avg_pace': 'avg_pace' in request.form,
-        'avg_pace_per_week': 'avg_pace_per_week' in request.form,
-        'beers_burnt': 'beers_burnt' in request.form,
-        'pizza_slices_burnt': 'pizza_slices_burnt' in request.form,
-        'remove_promo': 'remove_promo' in request.form
-    }
-
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("""
-            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                days_run = VALUES(days_run),
-                total_kms = VALUES(total_kms),
-                avg_kms = VALUES(avg_kms),
-                total_elevation = VALUES(total_elevation),
-                avg_elevation = VALUES(avg_elevation),
-                avg_pace = VALUES(avg_pace),
-                avg_pace_per_week = VALUES(avg_pace_per_week),
-                beers_burnt = VALUES(beers_burnt),
-                pizza_slices_burnt = VALUES(pizza_slices_burnt),
-                remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
-        connection.commit()
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-    return render_template('index.html', preferences=preferences, updated=True)
-
-@app.route('/create-checkout-session', methods=['POST'])
-def create_checkout_session():
-    athlete_id = session.get('athlete_id')
-    if not athlete_id:
-        return jsonify({'error': 'User not authenticated'}), 403
-
-    try:
-        checkout_url = f"https://buy.stripe.com/test_aEUeXf8AVcvVdA4000?client_reference_id={athlete_id}"
-        return jsonify({'url': checkout_url})
-    except Exception as e:
-        return jsonify(error=str(e)), 403
-
-@app.route('/webhook', methods=['POST'])
-def stripe_webhook():
-    payload = request.get_data(as_text=True)
-    sig_header = request.headers.get('Stripe-Signature')
-
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except ValueError as e:
-        print(f"Error while parsing webhook: {e}")
-        return 'Invalid payload', 400
-    except stripe.error.SignatureVerificationError as e:
-        print(f"Error while verifying webhook signature: {e}")
-        return 'Invalid signature', 400
-
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        customer_id = session['customer']
-        client_reference_id = session.get('client_reference_id')
-
-        if client_reference_id:
-            try:
-                connection = get_db_connection()
-                cursor = connection.cursor()
-                cursor.execute("""
-                    UPDATE strava_tokens SET is_paid_user = 1, stripe_customer_id = %s WHERE athlete_id = %s
-                """, (customer_id, client_reference_id))
-                connection.commit()
-            except mysql.connector.Error as err:
-                print(f"Error: {err.msg}")
-            finally:
-                if cursor:
-                    cursor.close()
-                if connection:
-                    connection.close()
-
-    return '', 200
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -252,6 +170,7 @@ def handle_activity_create(activity_id, owner_id):
     total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
     total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
+    # Get the activity to update
     activity_response = requests.get(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers
@@ -262,11 +181,16 @@ def handle_activity_create(activity_id, owner_id):
         return
 
     activity = activity_response.json()
+
+    # Fetch user preferences
     preferences = get_user_preferences(owner_id)
+
+    # Calculate calories burnt for this activity
     total_calories_burnt = activity.get('calories', 0)
     beers_burnt = total_calories_burnt / 140
     pizza_slices_burnt = total_calories_burnt / 285
 
+    # Build the new description based on preferences
     new_description = ""
     if preferences.get('days_run', True):
         new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
@@ -288,7 +212,7 @@ def handle_activity_create(activity_id, owner_id):
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': new_description}
+        json={'description': new_description}  # Use JSON data
     )
 
     if update_response.status_code == 200:
@@ -299,6 +223,7 @@ def handle_activity_create(activity_id, owner_id):
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
     start_of_year = datetime.datetime(today.year, 1, 1)
+
     run_dates = set()
 
     for activity in activities:
@@ -309,6 +234,7 @@ def calculate_days_run_this_year(activities):
 
     days_run = len(run_dates)
     total_days = (today - start_of_year).days + 1
+
     return days_run, total_days
 
 def calculate_kms_stats(activities):
@@ -327,6 +253,7 @@ def calculate_kms_stats(activities):
                 total_kms_run += activity['distance'] / 1000
 
     avg_kms_per_week = kms_last_4_weeks / 4
+
     return round(total_kms_run, 1), round(avg_kms_per_week, 1)
 
 def calculate_elevation_stats(activities):
@@ -345,6 +272,7 @@ def calculate_elevation_stats(activities):
                 total_elevation += activity['total_elevation_gain']
 
     avg_elevation_per_week = elevation_last_4_weeks / 4
+
     return round(total_elevation, 1), round(avg_elevation_per_week, 1)
 
 def get_user_preferences(owner_id):
@@ -365,8 +293,7 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': result.get('avg_pace_per_week', False),
                 'beers_burnt': result.get('beers_burnt', False),
                 'pizza_slices_burnt': result.get('pizza_slices_burnt', False),
-                'remove_promo': result.get('remove_promo', False),
-                'is_paid_user': is_paid_user(owner_id)
+                'remove_promo': result.get('remove_promo', False)
             }
         else:
             return {
@@ -379,8 +306,7 @@ def get_user_preferences(owner_id):
                 'avg_pace_per_week': False,
                 'beers_burnt': False,
                 'pizza_slices_burnt': False,
-                'remove_promo': False,
-                'is_paid_user': is_paid_user(owner_id)
+                'remove_promo': False
             }
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -394,27 +320,60 @@ def get_user_preferences(owner_id):
             'avg_pace_per_week': False,
             'beers_burnt': False,
             'pizza_slices_burnt': False,
-            'remove_promo': False,
-            'is_paid_user': is_paid_user(owner_id)
+            'remove_promo': False
         }
     finally:
         if connection:
             connection.close()
 
-def is_paid_user(athlete_id):
+@app.route('/update_preferences', methods=['POST'])
+def update_preferences():
+    owner_id = session.get('athlete_id')
+    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
+    if not owner_id:
+        return 'User not authenticated', 403
+
+    preferences = {
+        'days_run': 1 if 'days_run' in request.form else 0,
+        'total_kms': 1 if 'total_kms' in request.form else 0,
+        'avg_kms': 1 if 'avg_kms' in request.form else 0,
+        'total_elevation': 1 if 'total_elevation' in request.form else 0,
+        'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
+        'avg_pace': 1 if 'avg_pace' in request.form else 0,
+        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
+        'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
+        'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
+        'remove_promo': 1 if 'remove_promo' in request.form else 0
+    }
+
     try:
         connection = get_db_connection()
-        cursor = connection.cursor(dictionary=True)
-        cursor.execute("SELECT is_paid_user FROM strava_tokens WHERE athlete_id = %s", (athlete_id,))
-        result = cursor.fetchone()
-        cursor.close()
-        return result['is_paid_user'] == 1
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                days_run = VALUES(days_run),
+                total_kms = VALUES(total_kms),
+                avg_kms = VALUES(avg_kms),
+                total_elevation = VALUES(total_elevation),
+                avg_elevation = VALUES(avg_elevation),
+                avg_pace = VALUES(avg_pace),
+                avg_pace_per_week = VALUES(avg_pace_per_week),
+                beers_burnt = VALUES(beers_burnt),
+                pizza_slices_burnt = VALUES(pizza_slices_burnt),
+                remove_promo = VALUES(remove_promo)
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
+        connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
-        return False
     finally:
+        if cursor:
+            cursor.close()
         if connection:
             connection.close()
+
+    return render_template('index.html', preferences=preferences, updated=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
