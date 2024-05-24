@@ -7,37 +7,37 @@
 </head>
 <body>
     <h1>Strava Preferences</h1>
-    <form action="/update_preferences" method="post">
+    <form action="{{ url_for('update_preferences') }}" method="post">
         <label>
-            <input type="checkbox" name="days_run" {{ 'checked' if preferences['days_run'] else '' }}>
+            <input type="checkbox" name="days_run" {% if preferences['days_run'] %} checked {% endif %}>
             Days Run
         </label><br>
         <label>
-            <input type="checkbox" name="total_kms" {{ 'checked' if preferences['total_kms'] else '' }}>
+            <input type="checkbox" name="total_kms" {% if preferences['total_kms'] %} checked {% endif %}>
             Total Kms
         </label><br>
         <label>
-            <input type="checkbox" name="avg_kms" {{ 'checked' if preferences['avg_kms'] else '' }}>
+            <input type="checkbox" name="avg_kms" {% if preferences['avg_kms'] %} checked {% endif %}>
             Average Kms
         </label><br>
         <label>
-            <input type="checkbox" name="total_elevation" {{ 'checked' if preferences['total_elevation'] else '' }}>
+            <input type="checkbox" name="total_elevation" {% if preferences['total_elevation'] %} checked {% endif %}>
             Total Elevation
         </label><br>
         <label>
-            <input type="checkbox" name="avg_elevation" {{ 'checked' if preferences['avg_elevation'] else '' }}>
+            <input type="checkbox" name="avg_elevation" {% if preferences['avg_elevation'] %} checked {% endif %}>
             Average Elevation
         </label><br>
         <label>
-            <input type="checkbox" name="beers_burnt" {{ 'checked' if preferences['beers_burnt'] else '' }}>
+            <input type="checkbox" name="beers_burnt" {% if preferences['beers_burnt'] %} checked {% endif %}>
             Beers Burnt
         </label><br>
         <label>
-            <input type="checkbox" name="pizza_slices_burnt" {{ 'checked' if preferences['pizza_slices_burnt'] else '' }}>
+            <input type="checkbox" name="pizza_slices_burnt" {% if preferences['pizza_slices_burnt'] %} checked {% endif %}>
             Pizza Slices Burnt
         </label><br>
         <label>
-            <input type="checkbox" name="remove_promo" {{ 'checked' if preferences['remove_promo'] else '' }}>
+            <input type="checkbox" name="remove_promo" {% if preferences['remove_promo'] %} checked {% endif %}>
             Remove Promo
         </label><br>
         <button type="submit">Submit Changes</button>
