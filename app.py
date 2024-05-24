@@ -9,7 +9,11 @@ from flask_session import Session
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
-app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+app.config['SESSION_FILE_DIR'] = '/tmp/flask_sessions'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_TYPE'] = 'filesystem'
+
 Session(app)
 
 # Strava credentials
@@ -65,14 +69,21 @@ def login_callback():
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
 
+            # Debugging statements to verify session and tokens
+            print(f"Access Token: {access_token}")
+            print(f"Refresh Token: {refresh_token}")
+            print(f"Expires At: {expires_at}")
+            print(f"Athlete ID: {athlete_id}")
+            print(f"Session: {session}")
+
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
-            preferences = get_user_preferences(athlete_id)
             return redirect(url_for('dashboard'))
         else:
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
+
 
 
 @app.route('/deauthorize')
@@ -133,10 +144,13 @@ def get_tokens_from_db(owner_id):
 def dashboard():
     owner_id = session.get('athlete_id')
     if not owner_id:
+        print("No athlete_id in session. Redirecting to login.")
         return redirect('/login')
 
     preferences = get_user_preferences(owner_id)
+    print(f"Loaded preferences for {owner_id}: {preferences}")
     return render_template('dashboard.html', preferences=preferences)
+
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
