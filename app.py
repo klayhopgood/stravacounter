@@ -13,6 +13,7 @@ app.config['SESSION_FILE_DIR'] = '/tmp/flask_sessions'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)  # Adjust as needed
 
 Session(app)
 
@@ -68,6 +69,7 @@ def login_callback():
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
+            session.modified = True  # Ensure the session is saved
 
             # Debugging statements to verify session and tokens
             print(f"Access Token: {access_token}")
@@ -75,9 +77,9 @@ def login_callback():
             print(f"Expires At: {expires_at}")
             print(f"Athlete ID: {athlete_id}")
             print(f"Session: {session}")
+            print(f"Session ID: {request.cookies.get(app.session_cookie_name)}")
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
-            session.modified = True  # Ensure the session is saved
 
             return redirect(url_for('dashboard'))
         else:
@@ -96,6 +98,7 @@ def deauthorize():
             session.pop('refresh_token', None)
             session.pop('expires_at', None)
             session.pop('athlete_id', None)
+            session.modified = True
             return redirect('/')
         else:
             return 'Failed to deauthorize. Error: ' + response.text
@@ -148,6 +151,7 @@ def dashboard():
 
     preferences = get_user_preferences(owner_id)
     print(f"Loaded preferences for {owner_id}: {preferences}")
+    print(f"Session ID on dashboard: {request.cookies.get(app.session_cookie_name)}")
     return render_template('dashboard.html', preferences=preferences)
 
 @app.route('/webhook', methods=['GET', 'POST'])
@@ -399,6 +403,7 @@ def update_preferences():
         if connection:
             connection.close()
 
+    session.modified = True
     return redirect(url_for('dashboard'))
 
 if __name__ == '__main__':
