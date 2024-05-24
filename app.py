@@ -8,28 +8,28 @@ from dateutil import parser
 from flask_session import Session
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
+app.secret_key = secrets.token_hex(16)
 app.config['SESSION_FILE_DIR'] = '/tmp/flask_sessions'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)  # Adjust as needed
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)
 
 Session(app)
 
 # Strava credentials
-CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+CLIENT_ID = '99652'
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
     'ssl_disabled': False
 }
 
@@ -69,15 +69,13 @@ def login_callback():
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
-            session.modified = True  # Ensure the session is saved
+            session.modified = True
 
-            # Debugging statements to verify session and tokens
             print(f"Access Token: {access_token}")
             print(f"Refresh Token: {refresh_token}")
             print(f"Expires At: {expires_at}")
             print(f"Athlete ID: {athlete_id}")
-            print(f"Session: {session}")
-            print(f"Session ID: {request.cookies.get(app.session_cookie_name)}")
+            print(f"Session ID: {session.sid}")
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
@@ -94,11 +92,7 @@ def deauthorize():
         deauthorize_url = 'https://www.strava.com/oauth/deauthorize'
         response = requests.post(deauthorize_url, data={'access_token': access_token})
         if response.status_code == 200:
-            session.pop('access_token', None)
-            session.pop('refresh_token', None)
-            session.pop('expires_at', None)
-            session.pop('athlete_id', None)
-            session.modified = True
+            session.clear()
             return redirect('/')
         else:
             return 'Failed to deauthorize. Error: ' + response.text
@@ -151,7 +145,7 @@ def dashboard():
 
     preferences = get_user_preferences(owner_id)
     print(f"Loaded preferences for {owner_id}: {preferences}")
-    print(f"Session ID on dashboard: {request.cookies.get(app.session_cookie_name)}")
+    print(f"Session ID on dashboard: {session.sid}")
     return render_template('dashboard.html', preferences=preferences)
 
 @app.route('/webhook', methods=['GET', 'POST'])
