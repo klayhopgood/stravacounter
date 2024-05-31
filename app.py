@@ -82,10 +82,12 @@ def login_callback():
             print(f"Expires At: {expires_at}")
             print(f"Athlete ID: {athlete_id}")
 
+            print(f"Session before setting: {session}")
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
+            print(f"Session after setting: {session}")
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
@@ -99,7 +101,7 @@ def login_callback():
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
-    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
+    print(f"Session Athlete ID before check: {owner_id}")  # Debugging print statement
 
     # Additional debugging
     print(f"Request Form: {request.form}")
@@ -150,7 +152,6 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
-
 
 @app.route('/deauthorize')
 def deauthorize():
