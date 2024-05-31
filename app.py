@@ -336,12 +336,21 @@ def get_user_preferences(owner_id):
         if connection:
             connection.close()
 
+
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
-    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
     if not owner_id:
-        return 'User not authenticated', 403
+        # Fetch owner_id from the database using the access token as fallback
+        access_token = session.get('access_token')
+        if not access_token:
+            return 'User not authenticated', 403
+
+        tokens = get_tokens_from_db_by_access_token(access_token)
+        if tokens:
+            owner_id = tokens['athlete_id']
+        else:
+            return 'User not authenticated', 403
 
     preferences = {
         'days_run': 1 if 'days_run' in request.form else 0,
@@ -373,7 +382,10 @@ def update_preferences():
                 beers_burnt = VALUES(beers_burnt),
                 pizza_slices_burnt = VALUES(pizza_slices_burnt),
                 remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'],
+              preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'],
+              preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'],
+              preferences['remove_promo']))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -384,6 +396,21 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
+def get_tokens_from_db_by_access_token(access_token):
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT athlete_id, access_token, refresh_token, expires_at FROM strava_tokens WHERE access_token = %s", (access_token,))
+        result = cursor.fetchone()
+        cursor.close()
+        return result
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+        return None
+    finally:
+        if connection:
+            connection.close()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
