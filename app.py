@@ -70,6 +70,7 @@ def login_callback():
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
+            print(f"Set session athlete_id: {session.get('athlete_id')}")  # Debugging print statement
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
