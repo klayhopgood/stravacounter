@@ -15,7 +15,7 @@ app.secret_key = secrets.token_hex(16)
 
 # Configure Flask-Session
 app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system
-app.config['SESSION_FILE_DIR'] = '/root/StravaUploader/flask_session'  # Directory for session files
+app.config['SESSION_FILE_DIR'] = '/var/www/StravaUploader/flask_session'  # Directory for session files
 app.config['SESSION_PERMANENT'] = False  # Make the session non-permanent
 app.config['SESSION_USE_SIGNER'] = True  # Use a signed cookie
 app.config['SESSION_COOKIE_NAME'] = 'your_session_cookie'  # Optional: Customize the cookie name
