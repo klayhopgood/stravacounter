@@ -93,7 +93,7 @@ def login_callback():
             # save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
             # preferences = get_user_preferences(athlete_id)
-            return render_template('index.html')  # Removed preferences for simplification
+            return render_template('dashboard.html')  # Removed preferences for simplification
         else:
             return 'Failed to login. Error: ' + response.text
     else:
