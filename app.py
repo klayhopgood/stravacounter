@@ -7,7 +7,6 @@ import secrets
 from dateutil import parser
 from flask_session import Session
 import os
-from app import app
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -21,26 +20,25 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = session_dir
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_COOKIE_DOMAIN'] = 'plankton-app-fdt3l.ondigitalocean.app'  # Correct domain
+app.config['SESSION_COOKIE_DOMAIN'] = 'plankton-app-fdt3l.ondigitalocean.app'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = True  # Use True if you are running over HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True
 
 Session(app)
 
-
 # Strava credentials
-CLIENT_ID = '99652'  # Replace with your Strava client ID
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
+CLIENT_ID = '99652'
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
     'ssl_disabled': False
 }
 
@@ -82,12 +80,10 @@ def login_callback():
             print(f"Expires At: {expires_at}")
             print(f"Athlete ID: {athlete_id}")
 
-            print(f"Session before setting: {session}")
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
-            print(f"Session after setting: {session}")
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
@@ -108,6 +104,8 @@ def update_preferences():
 
     if not owner_id:
         return 'User not authenticated', 403
+
+    print(f"Session Athlete ID after check: {owner_id}")  # Additional debugging
 
     preferences = {
         'days_run': 1 if 'days_run' in request.form else 0,
@@ -152,6 +150,7 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -294,7 +293,7 @@ def handle_activity_create(activity_id, owner_id):
     update_response = requests.put(
         f'https://www.strava.com/api/v3/activities/{activity_id}',
         headers=headers,
-        json={'description': new_description}  # Use JSON data
+        json={'description': new_description}
     )
 
     if update_response.status_code == 200:
