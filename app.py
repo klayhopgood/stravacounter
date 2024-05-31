@@ -6,10 +6,20 @@ from mysql.connector import errorcode
 import secrets
 from dateutil import parser
 from flask_session import Session
+import os
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
-app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+
+# Session configuration
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = '/Users/klayhopgood/pythonProject/StravaUploader/flask_session'
+app.config['SESSION_PERMANENT'] = False  # Optional, depending on desired session behavior
+app.config['SESSION_USE_SIGNER'] = True  # Optional, to add an extra layer of security
+
+# Ensure the directory for session files exists
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
+
 Session(app)
 
 # Strava credentials
@@ -389,7 +399,6 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
