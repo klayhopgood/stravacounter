@@ -1,8 +1,8 @@
 from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import requests
 import mysql.connector
-import datetime
 from mysql.connector import errorcode
+import datetime
 import secrets
 from dateutil import parser
 from flask_session import Session
@@ -43,7 +43,12 @@ db_config = {
 }
 
 def get_db_connection():
-    return mysql.connector.connect(**db_config)
+    try:
+        connection = mysql.connector.connect(**db_config)
+        return connection
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        return None
 
 @app.route('/')
 def home():
@@ -90,9 +95,9 @@ def login_callback():
             preferences = get_user_preferences(athlete_id)
             return render_template('index.html', preferences=preferences)
         else:
-            return 'Failed to login. Error: ' + response.text
+            return f'Failed to login. Error: {response.text}', 400
     else:
-        return 'Authorization code not received.'
+        return 'Authorization code not received.', 400
 
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
@@ -124,6 +129,9 @@ def update_preferences():
 
     try:
         connection = get_db_connection()
+        if connection is None:
+            return 'Database connection failed', 500
+
         cursor = connection.cursor()
         cursor.execute("""
             INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
@@ -142,7 +150,8 @@ def update_preferences():
         """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
         connection.commit()
     except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
+        print(f"Error: {err}")
+        return 'Database error', 500
     finally:
         if cursor:
             cursor.close()
@@ -150,7 +159,6 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
-
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -165,13 +173,17 @@ def deauthorize():
             session.pop('athlete_id', None)
             return redirect('/')
         else:
-            return 'Failed to deauthorize. Error: ' + response.text
+            return f'Failed to deauthorize. Error: {response.text}', 400
     else:
         return redirect('/')
 
 def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
     try:
         connection = get_db_connection()
+        if connection is None:
+            print("Database connection failed")
+            return
+
         cursor = connection.cursor()
         cursor.execute("""
             INSERT INTO strava_tokens (athlete_id, owner_id, access_token, refresh_token, expires_at)
@@ -184,7 +196,7 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
+        print(f"Error: {err}")
     finally:
         if cursor:
             cursor.close()
@@ -194,13 +206,17 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
 def get_tokens_from_db(owner_id):
     try:
         connection = get_db_connection()
+        if connection is None:
+            print("Database connection failed")
+            return None
+
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT access_token, refresh_token, expires_at FROM strava_tokens WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
         cursor.close()
         return result
     except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
+        print(f"Error: {err}")
         return None
     finally:
         if connection:
@@ -236,70 +252,73 @@ def handle_activity_create(activity_id, owner_id):
         'Authorization': f'Bearer {access_token}'
     }
 
-    response = requests.get(
-        'https://www.strava.com/api/v3/athlete/activities',
-        headers=headers,
-        params={'per_page': 200}
-    )
+    try:
+        response = requests.get(
+            'https://www.strava.com/api/v3/athlete/activities',
+            headers=headers,
+            params={'per_page': 200}
+        )
 
-    if response.status_code != 200:
-        print(f"Failed to fetch activities: {response.text}")
-        return
+        if response.status_code != 200:
+            print(f"Failed to fetch activities: {response.text}")
+            return
 
-    activities = response.json()
-    days_run, total_days = calculate_days_run_this_year(activities)
-    total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
-    total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
+        activities = response.json()
+        days_run, total_days = calculate_days_run_this_year(activities)
+        total_kms_run, avg_kms_per_week = calculate_kms_stats(activities)
+        total_elevation, avg_elevation_per_week = calculate_elevation_stats(activities)
 
-    # Get the activity to update
-    activity_response = requests.get(
-        f'https://www.strava.com/api/v3/activities/{activity_id}',
-        headers=headers
-    )
+        # Get the activity to update
+        activity_response = requests.get(
+            f'https://www.strava.com/api/v3/activities/{activity_id}',
+            headers=headers
+        )
 
-    if activity_response.status_code != 200:
-        print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
-        return
+        if activity_response.status_code != 200:
+            print(f"Failed to fetch activity {activity_id}: {activity_response.text}")
+            return
 
-    activity = activity_response.json()
+        activity = activity_response.json()
 
-    # Fetch user preferences
-    preferences = get_user_preferences(owner_id)
+        # Fetch user preferences
+        preferences = get_user_preferences(owner_id)
 
-    # Calculate calories burnt for this activity
-    total_calories_burnt = activity.get('calories', 0)
-    beers_burnt = total_calories_burnt / 140
-    pizza_slices_burnt = total_calories_burnt / 285
+        # Calculate calories burnt for this activity
+        total_calories_burnt = activity.get('calories', 0)
+        beers_burnt = total_calories_burnt / 140
+        pizza_slices_burnt = total_calories_burnt / 285
 
-    # Build the new description based on preferences
-    new_description = ""
-    if preferences.get('days_run', True):
-        new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
-    if preferences.get('total_kms', True):
-        new_description += f"🏃 Total kms run this year: {total_kms_run:.1f} km\n"
-    if preferences.get('avg_kms', True):
-        new_description += f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n"
-    if preferences.get('total_elevation', False):
-        new_description += f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n"
-    if preferences.get('avg_elevation', False):
-        new_description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n"
-    if preferences.get('beers_burnt', False):
-        new_description += f"🍺 Beers burnt: {beers_burnt:.1f}\n"
-    if preferences.get('pizza_slices_burnt', False):
-        new_description += f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n"
-    if not preferences.get('remove_promo', False):
-        new_description += "Try for free at www.blah.com"
+        # Build the new description based on preferences
+        new_description = ""
+        if preferences.get('days_run', True):
+            new_description += f"🌍 Days run this year: {days_run}/{total_days}\n"
+        if preferences.get('total_kms', True):
+            new_description += f"🏃 Total kms run this year: {total_kms_run:.1f} km\n"
+        if preferences.get('avg_kms', True):
+            new_description += f"🏃 Average kms per week (last 4 weeks): {avg_kms_per_week:.1f} km\n"
+        if preferences.get('total_elevation', False):
+            new_description += f"⛰️ Total elevation gain this year: {total_elevation:.1f} m\n"
+        if preferences.get('avg_elevation', False):
+            new_description += f"⛰️ Average elevation per week (last 4 weeks): {avg_elevation_per_week:.1f} m\n"
+        if preferences.get('beers_burnt', False):
+            new_description += f"🍺 Beers burnt: {beers_burnt:.1f}\n"
+        if preferences.get('pizza_slices_burnt', False):
+            new_description += f"🍕 Pizza slices burnt: {pizza_slices_burnt:.1f}\n"
+        if not preferences.get('remove_promo', False):
+            new_description += "Try for free at www.blah.com"
 
-    update_response = requests.put(
-        f'https://www.strava.com/api/v3/activities/{activity_id}',
-        headers=headers,
-        json={'description': new_description}
-    )
+        update_response = requests.put(
+            f'https://www.strava.com/api/v3/activities/{activity_id}',
+            headers=headers,
+            json={'description': new_description}
+        )
 
-    if update_response.status_code == 200:
-        print(f"Activity {activity_id} updated successfully")
-    else:
-        print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+        if update_response.status_code == 200:
+            print(f"Activity {activity_id} updated successfully")
+        else:
+            print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+    except requests.RequestException as e:
+        print(f"Error during Strava API interaction: {e}")
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
@@ -359,6 +378,21 @@ def calculate_elevation_stats(activities):
 def get_user_preferences(owner_id):
     try:
         connection = get_db_connection()
+        if connection is None:
+            print("Database connection failed")
+            return {
+                'days_run': True,
+                'total_kms': True,
+                'avg_kms': True,
+                'total_elevation': False,
+                'avg_elevation': False,
+                'avg_pace': False,
+                'avg_pace_per_week': False,
+                'beers_burnt': False,
+                'pizza_slices_burnt': False,
+                'remove_promo': False
+            }
+
         cursor = connection.cursor(dictionary=True)
         cursor.execute("SELECT * FROM user_preferences WHERE owner_id = %s", (owner_id,))
         result = cursor.fetchone()
@@ -390,7 +424,7 @@ def get_user_preferences(owner_id):
                 'remove_promo': False
             }
     except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
+        print(f"Error: {err}")
         return {
             'days_run': True,
             'total_kms': True,
@@ -406,7 +440,6 @@ def get_user_preferences(owner_id):
     finally:
         if connection:
             connection.close()
-
 
 if __name__ == "__main__":
     app.run()
