@@ -8,8 +8,24 @@ from dateutil import parser
 from flask_session import Session
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
-app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
+
+# Generate a random secret key for the session
+app.secret_key = secrets.token_hex(16)
+
+# Configure Flask-Session
+app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system
+app.config['SESSION_FILE_DIR'] = '/root/StravaUploader/flask_session'  # Directory for session files
+app.config['SESSION_PERMANENT'] = False  # Make the session non-permanent
+app.config['SESSION_USE_SIGNER'] = True  # Use a signed cookie
+app.config['SESSION_COOKIE_NAME'] = 'your_session_cookie'  # Optional: Customize the cookie name
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Cookie only accessible via HTTP(S), not by JavaScript
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to False for testing over HTTP
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Adjust SameSite policy (can be 'Strict', 'Lax', or 'None')
+
+# Ensure the session directory exists and is writable
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
+
+# Initialize Flask-Session
 Session(app)
 
 # Strava credentials
@@ -73,10 +89,10 @@ def login_callback():
             print(f"Set session athlete_id: {session.get('athlete_id')}")
             print(f"Session data after login: {dict(session)}")  # Log entire session data
 
-            save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
+            # save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
-            preferences = get_user_preferences(athlete_id)
-            return render_template('index.html', preferences=preferences)
+            # preferences = get_user_preferences(athlete_id)
+            return render_template('index.html')  # Removed preferences for simplification
         else:
             return 'Failed to login. Error: ' + response.text
     else:
@@ -347,7 +363,8 @@ def update_preferences():
         if not access_token:
             return 'User not authenticated', 403
 
-        tokens = get_tokens_from_db_by_access_token(access_token)
+        # tokens = get_tokens_from_db_by_access_token(access_token)  # Placeholder function
+        tokens = None  # Placeholder for actual implementation
         if tokens:
             owner_id = tokens['athlete_id']
         else:
