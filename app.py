@@ -90,14 +90,14 @@ def login_callback():
             print(f"Set session athlete_id: {session.get('athlete_id')}")
             print(f"Session data after login: {dict(session)}")  # Log entire session data
 
-            # save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
-
-            # preferences = get_user_preferences(athlete_id)
-            return render_template('dashboard.html')  # Removed preferences for simplification
+            # Fetch user preferences and pass to template
+            preferences = get_user_preferences(athlete_id)
+            return render_template('dashboard.html', preferences=preferences)
         else:
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
+
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -363,7 +363,8 @@ def handle_activity_create(activity_id, owner_id):
             if not access_token:
                 return 'User not authenticated', 403
 
-            tokens = get_tokens_from_db_by_access_token(access_token)
+            # tokens = get_tokens_from_db_by_access_token(access_token)  # Placeholder function
+            tokens = None  # Placeholder for actual implementation
             if tokens:
                 owner_id = tokens['athlete_id']
             else:
@@ -412,7 +413,7 @@ def handle_activity_create(activity_id, owner_id):
             if connection:
                 connection.close()
 
-        return render_template('index.html', preferences=preferences, updated=True)
+        return render_template('dashboard.html', preferences=preferences, updated=True)
 
     @app.route('/session_debug')
     def session_debug():
