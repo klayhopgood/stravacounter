@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, jsonify, render_template, session, url_for, flash
+from flask import Flask, request, redirect, jsonify, render_template, session, url_for
 import requests
 import mysql.connector
 import datetime
@@ -8,28 +8,23 @@ from dateutil import parser
 from flask_session import Session
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
-app.config['SESSION_FILE_DIR'] = '/tmp/flask_sessions'
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)
-
+app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
+app.config['SESSION_TYPE'] = 'filesystem'  # Store sessions in the file system (or choose another type)
 Session(app)
 
 # Strava credentials
-CLIENT_ID = '99652'
-CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'
+CLIENT_ID = '99652'  # Replace with your Strava client ID
+CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
 VERIFY_TOKEN = 'STRAVA'
 
 # Database configuration
 db_config = {
     'user': 'doadmin',
-    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',
+    'password': 'AVNS_i5v39MnnGnz0wUvbNOS',  # Replace with your actual password
     'host': 'dbaas-db-10916787-do-user-16691845-0.c.db.ondigitalocean.com',
     'port': '25060',
     'database': 'defaultdb',
-    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',
+    'ssl_ca': '/Users/klayhopgood/Downloads/ca-certificate.crt',  # Adjust path if needed
     'ssl_disabled': False
 }
 
@@ -46,7 +41,6 @@ def login():
     authorize_url = f'https://www.strava.com/oauth/authorize?client_id={CLIENT_ID}&redirect_uri={redirect_uri}&response_type=code&scope=activity:write,activity:read_all'
     return redirect(authorize_url)
 
-@app.route('/login/callback')
 @app.route('/login/callback')
 def login_callback():
     code = request.args.get('code')
@@ -66,22 +60,25 @@ def login_callback():
             expires_at = tokens.get('expires_at')
             athlete_id = str(tokens.get('athlete').get('id'))
 
+            # Debugging print statements
+            print(f"Access Token: {access_token}")
+            print(f"Refresh Token: {refresh_token}")
+            print(f"Expires At: {expires_at}")
+            print(f"Athlete ID: {athlete_id}")
+
             session['access_token'] = access_token
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
-            session.modified = True
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
-            return redirect(url_for('dashboard'))
+            preferences = get_user_preferences(athlete_id)
+            return render_template('index.html', preferences=preferences)
         else:
-            print(f"OAuth Token Request Failed: {response.status_code} {response.text}")
             return 'Failed to login. Error: ' + response.text
     else:
-        print("Authorization code not received.")
         return 'Authorization code not received.'
-
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -90,7 +87,10 @@ def deauthorize():
         deauthorize_url = 'https://www.strava.com/oauth/deauthorize'
         response = requests.post(deauthorize_url, data={'access_token': access_token})
         if response.status_code == 200:
-            session.clear()
+            session.pop('access_token', None)
+            session.pop('refresh_token', None)
+            session.pop('expires_at', None)
+            session.pop('athlete_id', None)
             return redirect('/')
         else:
             return 'Failed to deauthorize. Error: ' + response.text
@@ -112,13 +112,12 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
-        print(f"Database Error: {err.msg}")
+        print(f"Error: {err.msg}")
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
-
 
 def get_tokens_from_db(owner_id):
     try:
@@ -134,39 +133,6 @@ def get_tokens_from_db(owner_id):
     finally:
         if connection:
             connection.close()
-
-def refresh_tokens(owner_id):
-    tokens = get_tokens_from_db(owner_id)
-    if tokens:
-        refresh_token = tokens['refresh_token']
-        token_url = 'https://www.strava.com/oauth/token'
-        payload = {
-            'client_id': CLIENT_ID,
-            'client_secret': CLIENT_SECRET,
-            'grant_type': 'refresh_token',
-            'refresh_token': refresh_token,
-        }
-        response = requests.post(token_url, data=payload)
-        if response.status_code == 200:
-            tokens = response.json()
-            save_tokens_to_db(owner_id, tokens.get('access_token'), tokens.get('refresh_token'), tokens.get('expires_at'))
-            return tokens.get('access_token')
-        else:
-            print(f"Token Refresh Failed: {response.status_code} {response.text}")
-    return None
-
-
-@app.route('/dashboard')
-def dashboard():
-    owner_id = session.get('athlete_id')
-    if not owner_id:
-        print("No athlete_id in session. Redirecting to login.")
-        return redirect('/login')
-
-    preferences = get_user_preferences(owner_id)
-    print(f"Loaded preferences for {owner_id}: {preferences}")
-    print(f"Session ID on dashboard: {session.sid}")
-    return render_template('dashboard.html', preferences=preferences)
 
 @app.route('/webhook', methods=['GET', 'POST'])
 def webhook():
@@ -372,6 +338,7 @@ def get_user_preferences(owner_id):
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
     owner_id = session.get('athlete_id')
+    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
     if not owner_id:
         return 'User not authenticated', 403
 
@@ -407,18 +374,15 @@ def update_preferences():
                 remove_promo = VALUES(remove_promo)
         """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
         connection.commit()
-        flash("Preferences updated successfully.", "success")
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
-        flash("Failed to update preferences.", "danger")
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
 
-    session.modified = True
-    return redirect(url_for('dashboard'))
+    return render_template('index.html', preferences=preferences, updated=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
