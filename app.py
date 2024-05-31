@@ -20,7 +20,7 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = session_dir
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_COOKIE_DOMAIN'] = 'https://plankton-app-fdt3l.ondigitalocean.app/'  # Adjust to your actual domain
+app.config['SESSION_COOKIE_DOMAIN'] = 'plankton-app-fdt3l.ondigitalocean.app'  # Correct domain
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = True  # Use True if you are running over HTTPS
 
