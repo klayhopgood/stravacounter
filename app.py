@@ -47,6 +47,7 @@ def login():
     return redirect(authorize_url)
 
 @app.route('/login/callback')
+@app.route('/login/callback')
 def login_callback():
     code = request.args.get('code')
     if code:
@@ -71,19 +72,16 @@ def login_callback():
             session['athlete_id'] = athlete_id
             session.modified = True
 
-            print(f"Access Token: {access_token}")
-            print(f"Refresh Token: {refresh_token}")
-            print(f"Expires At: {expires_at}")
-            print(f"Athlete ID: {athlete_id}")
-            print(f"Session ID: {session.sid}")
-
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
             return redirect(url_for('dashboard'))
         else:
+            print(f"OAuth Token Request Failed: {response.status_code} {response.text}")
             return 'Failed to login. Error: ' + response.text
     else:
+        print("Authorization code not received.")
         return 'Authorization code not received.'
+
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -114,12 +112,13 @@ def save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at):
         """, (athlete_id, athlete_id, access_token, refresh_token, expires_at))
         connection.commit()
     except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
+        print(f"Database Error: {err.msg}")
     finally:
         if cursor:
             cursor.close()
         if connection:
             connection.close()
+
 
 def get_tokens_from_db(owner_id):
     try:
@@ -135,6 +134,27 @@ def get_tokens_from_db(owner_id):
     finally:
         if connection:
             connection.close()
+
+def refresh_tokens(owner_id):
+    tokens = get_tokens_from_db(owner_id)
+    if tokens:
+        refresh_token = tokens['refresh_token']
+        token_url = 'https://www.strava.com/oauth/token'
+        payload = {
+            'client_id': CLIENT_ID,
+            'client_secret': CLIENT_SECRET,
+            'grant_type': 'refresh_token',
+            'refresh_token': refresh_token,
+        }
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            tokens = response.json()
+            save_tokens_to_db(owner_id, tokens.get('access_token'), tokens.get('refresh_token'), tokens.get('expires_at'))
+            return tokens.get('access_token')
+        else:
+            print(f"Token Refresh Failed: {response.status_code} {response.text}")
+    return None
+
 
 @app.route('/dashboard')
 def dashboard():
