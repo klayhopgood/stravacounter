@@ -7,9 +7,10 @@ import secrets
 from dateutil import parser
 from flask_session import Session
 import os
+from app import app
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)  # Generates and sets a random secret key
+app.secret_key = secrets.token_hex(16)
 
 # Use a relative path for session storage
 session_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flask_session')
@@ -25,6 +26,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = True  # Use True if you are running over HTTPS
 
 Session(app)
+
 
 # Strava credentials
 CLIENT_ID = '99652'  # Replace with your Strava client ID
@@ -93,6 +95,62 @@ def login_callback():
             return 'Failed to login. Error: ' + response.text
     else:
         return 'Authorization code not received.'
+
+@app.route('/update_preferences', methods=['POST'])
+def update_preferences():
+    owner_id = session.get('athlete_id')
+    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
+
+    # Additional debugging
+    print(f"Request Form: {request.form}")
+
+    if not owner_id:
+        return 'User not authenticated', 403
+
+    preferences = {
+        'days_run': 1 if 'days_run' in request.form else 0,
+        'total_kms': 1 if 'total_kms' in request.form else 0,
+        'avg_kms': 1 if 'avg_kms' in request.form else 0,
+        'total_elevation': 1 if 'total_elevation' in request.form else 0,
+        'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
+        'avg_pace': 1 if 'avg_pace' in request.form else 0,
+        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
+        'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
+        'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
+        'remove_promo': 1 if 'remove_promo' in request.form else 0
+    }
+
+    print(f"Updated Preferences: {preferences}")
+
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                days_run = VALUES(days_run),
+                total_kms = VALUES(total_kms),
+                avg_kms = VALUES(avg_kms),
+                total_elevation = VALUES(total_elevation),
+                avg_elevation = VALUES(avg_elevation),
+                avg_pace = VALUES(avg_pace),
+                avg_pace_per_week = VALUES(avg_pace_per_week),
+                beers_burnt = VALUES(beers_burnt),
+                pizza_slices_burnt = VALUES(pizza_slices_burnt),
+                remove_promo = VALUES(remove_promo)
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
+        connection.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err.msg}")
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+    return render_template('index.html', preferences=preferences, updated=True)
+
 
 @app.route('/deauthorize')
 def deauthorize():
@@ -349,60 +407,6 @@ def get_user_preferences(owner_id):
         if connection:
             connection.close()
 
-@app.route('/update_preferences', methods=['POST'])
-def update_preferences():
-    owner_id = session.get('athlete_id')
-    print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
 
-    # Additional debugging
-    print(f"Request Form: {request.form}")
-
-    if not owner_id:
-        return 'User not authenticated', 403
-
-    preferences = {
-        'days_run': 1 if 'days_run' in request.form else 0,
-        'total_kms': 1 if 'total_kms' in request.form else 0,
-        'avg_kms': 1 if 'avg_kms' in request.form else 0,
-        'total_elevation': 1 if 'total_elevation' in request.form else 0,
-        'avg_elevation': 1 if 'avg_elevation' in request.form else 0,
-        'avg_pace': 1 if 'avg_pace' in request.form else 0,
-        'avg_pace_per_week': 1 if 'avg_pace_per_week' in request.form else 0,
-        'beers_burnt': 1 if 'beers_burnt' in request.form else 0,
-        'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
-        'remove_promo': 1 if 'remove_promo' in request.form else 0
-    }
-
-    print(f"Updated Preferences: {preferences}")
-
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("""
-            INSERT INTO user_preferences (owner_id, days_run, total_kms, avg_kms, total_elevation, avg_elevation, avg_pace, avg_pace_per_week, beers_burnt, pizza_slices_burnt, remove_promo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                days_run = VALUES(days_run),
-                total_kms = VALUES(total_kms),
-                avg_kms = VALUES(avg_kms),
-                total_elevation = VALUES(total_elevation),
-                avg_elevation = VALUES(avg_elevation),
-                avg_pace = VALUES(avg_pace),
-                avg_pace_per_week = VALUES(avg_pace_per_week),
-                beers_burnt = VALUES(beers_burnt),
-                pizza_slices_burnt = VALUES(pizza_slices_burnt),
-                remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
-        connection.commit()
-    except mysql.connector.Error as err:
-        print(f"Error: {err.msg}")
-    finally:
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.close()
-
-    return render_template('index.html', preferences=preferences, updated=True)
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    app.run()
