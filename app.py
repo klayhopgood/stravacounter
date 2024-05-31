@@ -70,7 +70,8 @@ def login_callback():
             session['refresh_token'] = refresh_token
             session['expires_at'] = expires_at
             session['athlete_id'] = athlete_id
-            print(f"Set session athlete_id: {session.get('athlete_id')}")  # Debugging print statement
+            print(f"Set session athlete_id: {session.get('athlete_id')}")
+            print(f"Session data after login: {dict(session)}")  # Log entire session data
 
             save_tokens_to_db(athlete_id, access_token, refresh_token, expires_at)
 
@@ -339,9 +340,9 @@ def get_user_preferences(owner_id):
 
 @app.route('/update_preferences', methods=['POST'])
 def update_preferences():
+    print(f"Session data before updating preferences: {dict(session)}")  # Log session data
     owner_id = session.get('athlete_id')
     if not owner_id:
-        # Fetch owner_id from the database using the access token as fallback
         access_token = session.get('access_token')
         if not access_token:
             return 'User not authenticated', 403
@@ -382,10 +383,7 @@ def update_preferences():
                 beers_burnt = VALUES(beers_burnt),
                 pizza_slices_burnt = VALUES(pizza_slices_burnt),
                 remove_promo = VALUES(remove_promo)
-        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'],
-              preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'],
-              preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'],
-              preferences['remove_promo']))
+        """, (owner_id, preferences['days_run'], preferences['total_kms'], preferences['avg_kms'], preferences['total_elevation'], preferences['avg_elevation'], preferences['avg_pace'], preferences['avg_pace_per_week'], preferences['beers_burnt'], preferences['pizza_slices_burnt'], preferences['remove_promo']))
         connection.commit()
     except mysql.connector.Error as err:
         print(f"Error: {err.msg}")
@@ -396,6 +394,10 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
+@app.route('/session_debug')
+def session_debug():
+    return jsonify(dict(session))
 
 def get_tokens_from_db_by_access_token(access_token):
     try:
