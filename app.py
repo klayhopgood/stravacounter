@@ -339,6 +339,10 @@ def get_user_preferences(owner_id):
 def update_preferences():
     owner_id = session.get('athlete_id')
     print(f"Session Athlete ID: {owner_id}")  # Debugging print statement
+
+    # Additional debugging
+    print(f"Request Form: {request.form}")
+
     if not owner_id:
         return 'User not authenticated', 403
 
@@ -354,6 +358,8 @@ def update_preferences():
         'pizza_slices_burnt': 1 if 'pizza_slices_burnt' in request.form else 0,
         'remove_promo': 1 if 'remove_promo' in request.form else 0
     }
+
+    print(f"Updated Preferences: {preferences}")
 
     try:
         connection = get_db_connection()
@@ -383,6 +389,7 @@ def update_preferences():
             connection.close()
 
     return render_template('index.html', preferences=preferences, updated=True)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
