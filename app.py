@@ -29,6 +29,8 @@ os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 # Initialize Flask-Session
 Session(app)
 
+
+
 # Strava credentials
 CLIENT_ID = '99652'  # Replace with your Strava client ID
 CLIENT_SECRET = '2dc10e8d62b4925837aac970b6258fc3eae96c63'  # Replace with your Strava client secret
@@ -297,6 +299,11 @@ def handle_activity_create(activity_id, owner_id):
         print(f"Activity {activity_id} updated successfully")
     else:
         print(f"Failed to update activity {activity_id}: {update_response.status_code} {update_response.text}")
+
+@app.route('/create_session_test')
+def create_session_test():
+    session['test_key'] = 'test_value'
+    return 'Session created'
 
 def calculate_days_run_this_year(activities):
     today = datetime.datetime.today()
